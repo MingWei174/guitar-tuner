@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>吉他調音器（純前端）</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #freq { font-size: 32px; margin: 10px 0; }
+    #note { font-size: 32px; margin: 10px 0; }
+    #cents { font-size: 32px; margin: 10px 0; }
+    #startBtn, #stopBtn { padding: 8px 12px; font-size: 16px; margin-right:8px; }
+    canvas { border: 1px solid #ccc; display:block; margin-top:10px; }
+    #gauge { height: 100px; }
+  </style>
+</head>
+<body>
+  <h1>吉他調音器（純前端）</h1>
+  <button id="startBtn">開始</button>
+  <button id="stopBtn" disabled>停止</button>
+  <div id="status"></div>
+  <div id="freq">頻率: --- Hz</div>
+  <div id="note">音名: ---</div>
+  <div id="cents">偏差: --- cents</div>
+  <canvas id="canvas" width="600" height="120"></canvas>
+  <canvas id="gauge" width="600" height="120"></canvas>
+
+<script>
+/* 全域變數（讓 start/stop handler 共用）  py -3 -m http.server 8000  */
+let audioCtx = null;
+let source = null;
+let processor = null;
+let mediaStream = null;
+
+/* 可調常數 */
+const ENERGY_THRESHOLD = 0.0002; // 能量門檻（可依環境調整）// 原是0.0005,因為卡頓改成0.0002 // 更靈敏
+
+// 原來 const UI_INTERVAL = 100; //
+const UI_INTERVAL = 40; // 測試：更快的 UI 更新（ms）
+
+
+const STANDARD_TUNING = {
+  "E2": 82.4069,
+  "A2": 110.0000,
+  "D3": 146.8324,
+  "G3": 196.0000,
+  "B3": 246.9417,
+  "E4": 329.6276
+};
+
+function closestString(freq){
+  let bestName = null, bestF = null, bestDiff = Infinity;
+  for(const name in STANDARD_TUNING){
+    const f = STANDARD_TUNING[name];
+    const diff = Math.abs(1200 * Math.log2(freq / f));
+    if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
+  }
+  const cents = 1200 * Math.log2(freq / bestF);
+  return {name: bestName, targetF: bestF, cents: cents};
+}
+
+
+/* 改良版 autocorr（含 normalized peak 檢查 與 parabolic interpolation） */
+function autocorrWithCheck(buffer, sampleRate){
+  const size = buffer.length;
+  // remove DC
+  let mean = 0;
+  for(let i=0;i<size;i++) mean += buffer[i];
+  mean /= size;
+  for(let i=0;i<size;i++) buffer[i] -= mean;
+
+  // zero-lag energy
+  let zeroLag = 0;
+  for(let i=0;i<size;i++) zeroLag += buffer[i]*buffer[i];
+  if(zeroLag <= 0) return null;
+
+
+  // compute autocorrelation via FFT could be faster, but simple time-domain is OK for small size
+  let bestOffset = -1;
+  let bestCorr = 0;
+  const MIN_FREQ = 65;
+  const MAX_FREQ = 1000;
+  const maxLag = Math.floor(sampleRate / MIN_FREQ);
+  const minLag = Math.floor(sampleRate / MAX_FREQ);
+  if(maxLag >= size) return null;
+  for(let lag = minLag; lag <= maxLag; lag++){
+    let corr = 0;
+    for(let i=0; i < size - lag; i++){
+      corr += buffer[i] * buffer[i + lag];
+    }
+    if(corr > bestCorr){
+      bestCorr = corr;
+      bestOffset = lag;
+    }
+  }
+
+  if(bestOffset <= 0) return null;
+
+  // normalized peak check
+  const norm = bestCorr / zeroLag;
+  // autocorrWithCheck 中的 norm 檢查
+  // 原來 if(norm < 0.25) return null;
+  if(norm < 0.18) return null;   // 更低門檻，對短音符更友善   // 閥值可調（0.2~0.4）
+
+  // parabolic interpolation around bestOffset for better resolution
+  function autocorrLag(lag) {
+    if(lag < 1 || lag >= size) return 0;
+    let c = 0;
+    for(let i=0; i < size - lag; i++) c += buffer[i] * buffer[i + lag];
+    return c;
+  }
+  let c0 = autocorrLag(bestOffset - 1);
+  let c1 = bestCorr; // autocorrLag(bestOffset)
+  let c2 = autocorrLag(bestOffset + 1);
+  const denom = (c0 - 2*c1 + c2);
+  let offset = bestOffset;
+  if(denom !== 0){
+    offset = bestOffset + 0.5 * (c0 - c2) / denom;
+  }
+  const freq = sampleRate / offset;
+  return freq;
+}
+
+/* draw 函式（與原本邏輯相同，但使用外部 ctx 參數） */
+function drawWave(input, ctx, canvas) {
+  if (!ctx || !canvas) return;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!input || input.length === 0) return;
+  ctx.strokeStyle = '#007acc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const step = Math.max(1, Math.floor(input.length / canvas.width));
+  for (let i = 0; i < canvas.width; i++) {
+    const v = input[Math.floor(i * step)];
+    const y = (1 - (v + 1) / 2) * canvas.height;
+    if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+}
+
+function drawGauge(cents, gctx, gauge, noteName) {
+  if (!gctx || !gauge) return;
+  gctx.fillStyle = '#fff';
+  gctx.fillRect(0, 0, gauge.width, gauge.height);
+
+  const w = gauge.width;
+  const h = gauge.height;
+  const cy = h / 2;
+
+  const range = 50;
+  const usable = w * 0.9;
+  const left = (w - usable) / 2;
+
+  // 外框
+  gctx.strokeStyle = '#ddd';
+  gctx.lineWidth = 1;
+  gctx.beginPath();
+  gctx.rect(left, cy - 22, usable, 44);
+  gctx.stroke();
+
+  // 刻度
+  gctx.font = '12px Arial';
+  gctx.fillStyle = '#000';
+  const marks = [-50, -25, 0, 25, 50];
+  marks.forEach(m => {
+    const x = left + ((m + range) / (2 * range)) * usable;
+    gctx.beginPath();
+    gctx.moveTo(x, cy - 14);
+    gctx.lineTo(x, cy + 14);
+    gctx.strokeStyle = '#888';
+    gctx.lineWidth = 2;
+    gctx.stroke();
+    gctx.fillStyle = '#000';
+    gctx.textAlign = 'center';
+    gctx.fillText(m.toString(), x, cy + 30);
+  });
+
+  // 中心標線
+  gctx.strokeStyle = '#000';
+  gctx.lineWidth = 1;
+  gctx.beginPath();
+  gctx.moveTo(left + usable / 2, cy - 18);
+  gctx.lineTo(left + usable / 2, cy + 18);
+  gctx.stroke();
+
+  if (noteName) {
+    gctx.fillStyle = '#000';
+    gctx.font = '16px Arial';
+    gctx.textAlign = 'left';
+    gctx.fillText('弦: ' + noteName, 12, 22);
+  }
+
+  if (cents === null || cents === undefined) return;
+
+  const disp = Math.max(-range, Math.min(range, cents));
+  const px = left + ((disp + range) / (2 * range)) * usable;
+
+  const absC = Math.abs(disp);
+  let fillColor = '#d9534f';
+  if (absC < 5) fillColor = '#5cb85c';
+  else if (absC < 15) fillColor = '#f0ad4e';
+
+  gctx.fillStyle = fillColor;
+  gctx.beginPath();
+  gctx.moveTo(px, cy - 18);
+  gctx.lineTo(px - 8, cy - 30);
+  gctx.lineTo(px + 8, cy - 30);
+  gctx.closePath();
+  gctx.fill();
+
+  gctx.fillStyle = '#000';
+  gctx.font = '14px Arial';
+  gctx.textAlign = 'center';
+  const label = (cents >= 0 ? '+' : '') + cents.toFixed(1) + ' cents';
+  gctx.fillText(label, w/2, cy + 48);
+}
+
+/* DOM 元素 */
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const status = document.getElementById('status');
+const freqEl = document.getElementById('freq');
+const noteEl = document.getElementById('note');
+const centsEl = document.getElementById('cents');
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const gauge = document.getElementById('gauge');
+const gctx = gauge.getContext('2d');
+
+/* 事件：開始 */
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  status.textContent = '取得麥克風中...';
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(mediaStream);
+
+    /////////////////// 原來 const bufferSize = 4096 /////////////////////
+    const bufferSize = 2048; // 或 1024；測試哪個對你吉他/麥克風最順
+
+    processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+    // 建立 zeroGain 維持連線到 destination，但不會真的發出聲音
+    zeroGain = audioCtx.createGain();
+    zeroGain.gain.value = 0;
+    zeroGain.connect(audioCtx.destination);
+
+    // prevent GC: 讓 zeroGain、processor 等有參考（我們是全域變數）
+    let lastUIUpdate = 0;
+
+    processor.onaudioprocess = (e) => {
+      // 若要偵錯是否持續呼叫，解除下面註解
+      // console.log('onaudioprocess', performance.now());
+
+      const input = e.inputBuffer.getChannelData(0);
+      // energy gate
+      let energy = 0;
+      for(let i=0;i<input.length;i++) energy += input[i]*input[i];
+      energy = Math.sqrt(energy / input.length);
+      if(energy < ENERGY_THRESHOLD) {
+        // 此處只清波形以顯示 "很安靜"；保留 gauge 以避免使用者誤以為程式卡住
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        return;
+      }
+
+      // 如果 audioCtx 被 suspend，嘗試 resume
+      if(audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(()=>{});
+      }
+
+      // 複製 buffer（避免在 autocorr 裡直接修改原 buffer）
+      const buf = new Float32Array(input);
+
+      const freq = autocorrWithCheck(buf, audioCtx.sampleRate);
+      if (!freq || !isFinite(freq) || freq < 20 || freq > 5000) {
+        // 無效結果，直接忽略（或可顯示 '偵測不到頻率'）
+        return;
+      }
+
+      const now = performance.now();
+      if(now - lastUIUpdate > UI_INTERVAL) {
+        lastUIUpdate = now;
+        const res = closestString(freq);
+
+      // 使用字串連接，避免 template literal 的反引號或 ${} 轉碼問題
+      document.getElementById('freq').textContent ='頻率: ' + freq.toFixed(1) + ' Hz';
+      document.getElementById('note').textContent ='音名: ' + res.name + ' (' + res.targetF.toFixed(1) + ' Hz)';
+      document.getElementById('cents').textContent ='偏差: ' + (res.cents >= 0 ? '+' : '') + res.cents.toFixed(1) + ' cents';
+      drawWave(input, ctx, canvas);
+      drawGauge(res.cents, gctx, gauge, res.name);
+      }
+    };
+
+    // 連線（processor 為輸入 node）；connect 到 zeroGain 再到 destination，能確保 onaudioprocess 不會被瀏覽器暫停
+    source.connect(processor);
+    processor.connect(zeroGain);
+
+    status.textContent = "已取得麥克風，開始分析中...";
+    
+    // 啟用停止按鈕
+    stopBtn.disabled = false;
+
+  } catch (err) {
+    status.textContent = "無法取得麥克風：" + err.message;
+    startBtn.disabled = false;
+  }
+});
+
+// 綁 stop 事件
+stopBtn.addEventListener('click', () => {
+  // 防護：只有在有資源時才執行釋放
+  try {
+    if (processor) {
+      try { processor.disconnect(); } catch (e) {}
+      processor.onaudioprocess = null;
+      processor = null;
+    }
+    if (source) {
+      try { source.disconnect(); } catch (e) {}
+      source = null;
+    }
+    if (zeroGain) {
+      try { zeroGain.disconnect(); } catch (e) {}
+      zeroGain = null;
+    }
+    if (audioCtx) {
+      try { audioCtx.close(); } catch (e) {}
+      audioCtx = null;
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+  } catch (err) {
+    console.warn('停止時發生錯誤', err);
+  }
+
+  // UI reset
+  document.getElementById('status').textContent = '已停止。';
+  document.getElementById('freq').textContent = '頻率: --- Hz';
+  document.getElementById('note').textContent = '音名: ---';
+  document.getElementById('cents').textContent = '偏差: --- cents';
+
+  stopBtn.disabled = true;
+  document.getElementById('startBtn').disabled = false;
+
+});
+
+</script>
+</body>
+</html>
