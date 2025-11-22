@@ -272,39 +272,42 @@ let afArray = null;
 let lastPitchTime = 0;
 let lastUIUpdate = 0;
 
-/* 開始按鈕 */
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   statusEl.textContent = '請求麥克風權限中...';
   
   try {
-    // **修正：對於部分麥克風，autoGainControl: false 會導致輸入極小**
-    // 建議先開啟 true 確保有聲音，或者移除 constraints 讓瀏覽器決定
+    // 1. 嘗試強制開啟增益 (雖然瀏覽器不一定完全聽話)
     const constraints = {
       audio: {
         echoCancellation: false,
-        autoGainControl: true,  // 改為 true，或者刪除這行
+        autoGainControl: true, 
         noiseSuppression: false 
       }
     };
 
     mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     source = audioCtx.createMediaStreamSource(mediaStream);
 
+    // --- 新增：低通濾波器 (關鍵修改) ---
+    // 這會過濾掉 1000Hz 以上的聲音，讓調音器專注於吉他的基頻
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass'; 
+    filter.frequency.value = 1000; // 吉他高音E弦約 330Hz，設 1000 綽綽有餘，能濾掉雜訊
+    
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = RESIZE_ANALYSER_SIZE;
-    analyser.smoothingTimeConstant = 0; // 0 = 最即時的反應
+    analyser.smoothingTimeConstant = 0; 
     afArray = new Float32Array(analyser.fftSize);
 
-    // 建立一個靜音的輸出，防止瀏覽器讓 AudioContext 休眠
     zeroGain = audioCtx.createGain();
     zeroGain.gain.value = 0;
     
-    // 連接線路：Source -> Analyser -> ZeroGain -> Destination
-    // **修正：移除了 processor，它是不必要的並可能導致卡頓**
-    source.connect(analyser);
+    // --- 修改連接順序 ---
+    // Source(麥克風) -> Filter(濾波) -> Analyser(分析) -> ZeroGain -> Destination
+    source.connect(filter);
+    filter.connect(analyser);
     analyser.connect(zeroGain);
     zeroGain.connect(audioCtx.destination);
 
