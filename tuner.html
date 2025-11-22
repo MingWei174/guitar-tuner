@@ -11,6 +11,7 @@
     #startBtn, #stopBtn { padding: 8px 12px; font-size: 16px; margin-right:8px; }
     canvas { border: 1px solid #ccc; display:block; margin-top:10px; }
     #gauge { height: 100px; }
+    #debug { font-size: 12px; color: #666; margin-top:8px; }
   </style>
 </head>
 <body>
@@ -35,6 +36,7 @@ let mediaStream = null;
 const ENERGY_THRESHOLD = 0.0002; // RMS 門檻（可根據環境微調）
 const UI_INTERVAL = 40; // ms (UI 文字更新節流)  // 原來 const UI_INTERVAL = 100; //  // 測試：更快的 UI 更新（ms）
 const PITCH_INTERVAL = 80; // ms（pitch 偵測節流）
+const RESIZE_ANALYSER_SIZE = 2048;
 
 const STANDARD_TUNING = {
   "E2": 82.4069,
@@ -231,14 +233,20 @@ let afArray = null; // Float32Array for analyser data
 let lastPitchTime = 0;
 let lastUIUpdate = 0;
 
-/* 節流與參數 */
-const RESIZE_ANALYSER_SIZE = 2048; // analyser.fftSize
-
 /* 事件：開始 */
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   status.textContent = '取得麥克風中...';
   try {
+     // 關閉瀏覽器預設處理（請注意：部分瀏覽器/裝置可能不支援某些選項）
+    const constraints = {
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    };
+
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     source = audioCtx.createMediaStreamSource(mediaStream);
@@ -253,9 +261,10 @@ startBtn.addEventListener('click', async () => {
     zeroGain.gain.value = 0;
     zeroGain.connect(audioCtx.destination);
 
-    // 建立 analyser（用於視覺化）
+    // 建立analyser
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = RESIZE_ANALYSER_SIZE; // 2048
+    analyser.fftSize = RESIZE_ANALYSER_SIZE;
+    analyser.smoothingTimeConstant = 0; // 不做時間平滑（更即時）
     afArray = new Float32Array(analyser.fftSize);
 
     // connect chain: source -> analyser -> zeroGain
@@ -319,26 +328,29 @@ stopBtn.addEventListener('click', () => {
   centsEl.textContent = '偏差: --- cents';
   ctx.clearRect(0,0,canvas.width,canvas.height);
   gctx.clearRect(0,0,gauge.width,gauge.height);
-
+  debugEl.textContent = '';
   stopBtn.disabled = true;
   startBtn.disabled = false;
 });
 
 /* drawLoop：用 rAF 取 analyser 資料並畫出 waveform；同時節流做 pitch 偵測 */
-function drawLoop() {
-  if (!analyser || !audioCtx) return; // 停止條件
-
-  // 取得時域資料（Float32Array, 值域 -1..1）
+/* drawLoop */
+function drawLoop(){
+  if (!analyser || !audioCtx) return;
   analyser.getFloatTimeDomainData(afArray);
 
-  // 計算 RMS（energy）
+  // 計算 RMS 並顯示（debug）
   let energy = 0;
   for (let i = 0; i < afArray.length; i++) energy += afArray[i]*afArray[i];
   energy = Math.sqrt(energy / afArray.length);
 
-  // 若能量太低，可選擇不要清畫面而僅微淡化或保留上一張；此處我們畫一條淡藍直線以表示低訊號避免閃爍
+  // 把前 10 個 sample 印出來做偵錯（可取消）
+  const samplePreview = Array.from(afArray.slice(0,10)).map(v => v.toFixed(4)).join(', ');
+
+  debugEl.textContent = 'RMS=' + energy.toFixed(6) + ' | samples[0..9]: ' + samplePreview;
+
   if (energy < ENERGY_THRESHOLD) {
-    // 畫一條中心線（或你也可以 choose to clear）
+    // 畫中心線（避免閃爍）
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = '#c0e6ff';
@@ -347,26 +359,19 @@ function drawLoop() {
     ctx.moveTo(0, canvas.height/2);
     ctx.lineTo(canvas.width, canvas.height/2);
     ctx.stroke();
-
-    // 也可以顯示狀態
     status.textContent = '訊號過小 (RMS=' + energy.toFixed(6) + ')';
   } else {
     status.textContent = '偵測中 (RMS=' + energy.toFixed(6) + ')';
     drawWave(afArray, ctx, canvas);
   }
 
-  // pitch 偵測節流（不要每個 rAF 都做）
   const now = performance.now();
   if (now - lastPitchTime >= PITCH_INTERVAL && energy >= ENERGY_THRESHOLD) {
     lastPitchTime = now;
-
-    // 為了避免 autocorr 改變原始陣列，我們建立一個複本
-    const buf = new Float32Array(afArray); // copy
-    // 你也可以選擇以更長或更短的片段進行分析（例如取中段）
+    const buf = new Float32Array(afArray); // 複本
     const freq = autocorrWithCheck(buf, audioCtx.sampleRate);
     if (freq && isFinite(freq) && freq >= 20 && freq <= 5000) {
       const res = closestString(freq);
-      // UI 節流：UI_INTERVAL ms
       if (now - lastUIUpdate >= UI_INTERVAL) {
         lastUIUpdate = now;
         freqEl.textContent = '頻率: ' + freq.toFixed(1) + ' Hz';
