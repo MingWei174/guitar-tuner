@@ -32,11 +32,9 @@ let processor = null;
 let mediaStream = null;
 
 /* 可調常數 */
-const ENERGY_THRESHOLD = 0.0002; // 能量門檻（可依環境調整）// 原是0.0005,因為卡頓改成0.0002 // 更靈敏
-
-// 原來 const UI_INTERVAL = 100; //
-const UI_INTERVAL = 40; // 測試：更快的 UI 更新（ms）
-
+const ENERGY_THRESHOLD = 0.0002; // RMS 門檻（可根據環境微調）
+const UI_INTERVAL = 40; // ms (UI 文字更新節流)  // 原來 const UI_INTERVAL = 100; //  // 測試：更快的 UI 更新（ms）
+const PITCH_INTERVAL = 80; // ms（pitch 偵測節流）
 
 const STANDARD_TUNING = {
   "E2": 82.4069,
@@ -120,7 +118,7 @@ function autocorrWithCheck(buffer, sampleRate){
   return freq;
 }
 
-/* draw 函式（與原本邏輯相同，但使用外部 ctx 參數） */
+/* 繪圖函式（重用） */
 function drawWave(input, ctx, canvas) {
   if (!ctx || !canvas) return;
   ctx.fillStyle = '#fff';
@@ -228,6 +226,14 @@ const ctx = canvas.getContext('2d');
 const gauge = document.getElementById('gauge');
 const gctx = gauge.getContext('2d');
 
+/* rAF 與 analyser buffer */
+let afArray = null; // Float32Array for analyser data
+let lastPitchTime = 0;
+let lastUIUpdate = 0;
+
+/* 節流與參數 */
+const RESIZE_ANALYSER_SIZE = 2048; // analyser.fftSize
+
 /* 事件：開始 */
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
@@ -247,51 +253,17 @@ startBtn.addEventListener('click', async () => {
     zeroGain.gain.value = 0;
     zeroGain.connect(audioCtx.destination);
 
-    // prevent GC: 讓 zeroGain、processor 等有參考（我們是全域變數）
-    let lastUIUpdate = 0;
+    // 建立 analyser（用於視覺化）
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = RESIZE_ANALYSER_SIZE; // 2048
+    afArray = new Float32Array(analyser.fftSize);
 
-    processor.onaudioprocess = (e) => {
-      // 若要偵錯是否持續呼叫，解除下面註解
-      // console.log('onaudioprocess', performance.now());
+    // connect chain: source -> analyser -> zeroGain
+    source.connect(analyser);
+    analyser.connect(zeroGain);
 
-      const input = e.inputBuffer.getChannelData(0);
-      // energy gate
-      let energy = 0;
-      for(let i=0;i<input.length;i++) energy += input[i]*input[i];
-      energy = Math.sqrt(energy / input.length);
-      if(energy < ENERGY_THRESHOLD) {
-        // 此處只清波形以顯示 "很安靜"；保留 gauge 以避免使用者誤以為程式卡住
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        return;
-      }
-
-      // 如果 audioCtx 被 suspend，嘗試 resume
-      if(audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(()=>{});
-      }
-
-      // 複製 buffer（避免在 autocorr 裡直接修改原 buffer）
-      const buf = new Float32Array(input);
-
-      const freq = autocorrWithCheck(buf, audioCtx.sampleRate);
-      if (!freq || !isFinite(freq) || freq < 20 || freq > 5000) {
-        // 無效結果，直接忽略（或可顯示 '偵測不到頻率'）
-        return;
-      }
-
-      const now = performance.now();
-      if(now - lastUIUpdate > UI_INTERVAL) {
-        lastUIUpdate = now;
-        const res = closestString(freq);
-
-      // 使用字串連接，避免 template literal 的反引號或 ${} 轉碼問題
-      document.getElementById('freq').textContent ='頻率: ' + freq.toFixed(1) + ' Hz';
-      document.getElementById('note').textContent ='音名: ' + res.name + ' (' + res.targetF.toFixed(1) + ' Hz)';
-      document.getElementById('cents').textContent ='偏差: ' + (res.cents >= 0 ? '+' : '') + res.cents.toFixed(1) + ' cents';
-      drawWave(input, ctx, canvas);
-      drawGauge(res.cents, gctx, gauge, res.name);
-      }
-    };
+    // optional: 若你想要同時在 audio callback 取得 buffer 作更精細的 energy 判斷，也可以建立 ScriptProcessor
+    // 但這裡不必要，analyser.getFloatTimeDomainData 已可取得樣本
 
     // 連線（processor 為輸入 node）；connect 到 zeroGain 再到 destination，能確保 onaudioprocess 不會被瀏覽器暫停
     source.connect(processor);
@@ -301,6 +273,10 @@ startBtn.addEventListener('click', async () => {
     
     // 啟用停止按鈕
     stopBtn.disabled = false;
+    requestAnimationFrame(drawLoop);
+    // 也可以立即跑一次 gauge 清空
+    drawGauge(null, gctx, gauge, null);
+
 
   } catch (err) {
     status.textContent = "無法取得麥克風：" + err.message;
@@ -337,16 +313,72 @@ stopBtn.addEventListener('click', () => {
     console.warn('停止時發生錯誤', err);
   }
 
-  // UI reset
-  document.getElementById('status').textContent = '已停止。';
-  document.getElementById('freq').textContent = '頻率: --- Hz';
-  document.getElementById('note').textContent = '音名: ---';
-  document.getElementById('cents').textContent = '偏差: --- cents';
+  status.textContent = '已停止。';
+  freqEl.textContent = '頻率: --- Hz';
+  noteEl.textContent = '音名: ---';
+  centsEl.textContent = '偏差: --- cents';
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  gctx.clearRect(0,0,gauge.width,gauge.height);
 
   stopBtn.disabled = true;
-  document.getElementById('startBtn').disabled = false;
-
+  startBtn.disabled = false;
 });
+
+/* drawLoop：用 rAF 取 analyser 資料並畫出 waveform；同時節流做 pitch 偵測 */
+function drawLoop() {
+  if (!analyser || !audioCtx) return; // 停止條件
+
+  // 取得時域資料（Float32Array, 值域 -1..1）
+  analyser.getFloatTimeDomainData(afArray);
+
+  // 計算 RMS（energy）
+  let energy = 0;
+  for (let i = 0; i < afArray.length; i++) energy += afArray[i]*afArray[i];
+  energy = Math.sqrt(energy / afArray.length);
+
+  // 若能量太低，可選擇不要清畫面而僅微淡化或保留上一張；此處我們畫一條淡藍直線以表示低訊號避免閃爍
+  if (energy < ENERGY_THRESHOLD) {
+    // 畫一條中心線（或你也可以 choose to clear）
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#c0e6ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height/2);
+    ctx.lineTo(canvas.width, canvas.height/2);
+    ctx.stroke();
+
+    // 也可以顯示狀態
+    status.textContent = '訊號過小 (RMS=' + energy.toFixed(6) + ')';
+  } else {
+    status.textContent = '偵測中 (RMS=' + energy.toFixed(6) + ')';
+    drawWave(afArray, ctx, canvas);
+  }
+
+  // pitch 偵測節流（不要每個 rAF 都做）
+  const now = performance.now();
+  if (now - lastPitchTime >= PITCH_INTERVAL && energy >= ENERGY_THRESHOLD) {
+    lastPitchTime = now;
+
+    // 為了避免 autocorr 改變原始陣列，我們建立一個複本
+    const buf = new Float32Array(afArray); // copy
+    // 你也可以選擇以更長或更短的片段進行分析（例如取中段）
+    const freq = autocorrWithCheck(buf, audioCtx.sampleRate);
+    if (freq && isFinite(freq) && freq >= 20 && freq <= 5000) {
+      const res = closestString(freq);
+      // UI 節流：UI_INTERVAL ms
+      if (now - lastUIUpdate >= UI_INTERVAL) {
+        lastUIUpdate = now;
+        freqEl.textContent = '頻率: ' + freq.toFixed(1) + ' Hz';
+        noteEl.textContent = '音名: ' + res.name + ' (' + res.targetF.toFixed(1) + ' Hz)';
+        centsEl.textContent = '偏差: ' + (res.cents >= 0 ? '+' : '') + res.cents.toFixed(1) + ' cents';
+        drawGauge(res.cents, gctx, gauge, res.name);
+      }
+    }
+  }
+
+  requestAnimationFrame(drawLoop);
+}
 
 </script>
 </body>
