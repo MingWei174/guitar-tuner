@@ -1,100 +1,417 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8" />
-<title>調音器 Debug（samples & device info）</title>
-<style> body{font-family:Arial;padding:16px} pre{background:#f6f6f6;padding:8px;border:1px solid #ddd;}</style>
+  <meta charset="utf-8" />
+  <title>吉他調音器（純前端）</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; }
+    h1 { margin-bottom: 20px; }
+    
+    .display-box {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-top: 20px;
+    }
+
+    #freq { font-size: 32px; margin: 10px 0; font-weight: bold; color: #333; }
+    #note { font-size: 32px; margin: 10px 0; color: #007acc; }
+    #cents { font-size: 32px; margin: 10px 0; }
+    
+    button { 
+        padding: 10px 20px; 
+        font-size: 16px; 
+        margin-right: 8px; 
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+    }
+    #startBtn { background-color: #28a745; color: white; }
+    #startBtn:disabled { background-color: #ccc; }
+    #stopBtn { background-color: #dc3545; color: white; }
+    #stopBtn:disabled { background-color: #ccc; }
+
+    canvas { border: 1px solid #ccc; display: block; margin-top: 10px; background: #fff; width: 100%; max-width: 600px; }
+    #status { margin-top: 10px; color: #666; font-style: italic; }
+    #debug { font-size: 12px; color: #999; margin-top: 8px; font-family: monospace; }
+  </style>
 </head>
 <body>
-<h2>調音器 Debug 版</h2>
-<button id="start">開始</button><button id="stop" disabled>停止</button>
-<div id="info"></div>
-<pre id="debug"></pre>
-<canvas id="canvas" width="600" height="120" style="border:1px solid #ccc"></canvas>
+  <h1>吉他調音器（純前端）</h1>
+  
+  <div>
+      <button id="startBtn">開始調音</button>
+      <button id="stopBtn" disabled>停止</button>
+  </div>
+  <div id="status">請按下開始</div>
+
+  <div class="display-box">
+      <div id="freq">頻率: --- Hz</div>
+      <div id="note">音名: ---</div>
+      <div id="cents">偏差: --- cents</div>
+      
+      <canvas id="canvas" width="600" height="120"></canvas>
+      <canvas id="gauge" width="600" height="120"></canvas>
+      <div id="debug"></div>
+  </div>
 
 <script>
-let audioCtx=null, source=null, analyser=null, mediaStream=null, zeroGain=null;
-const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
-const info=document.getElementById('info'), debug=document.getElementById('debug');
-const startBtn=document.getElementById('start'), stopBtn=document.getElementById('stop');
+/* 1. 定義全域變數 (確保所有函式都能存取) */
+let audioCtx = null;
+let source = null;
+let analyser = null; // 之前漏了這個宣告
+let zeroGain = null;
+let mediaStream = null;
+let rafId = null;    // 用來管理動畫迴圈 ID
 
-startBtn.addEventListener('click', async ()=>{
-  startBtn.disabled=true; info.textContent='正在要求麥克風...';
-  try{
-    // 先用寬鬆 constraints（若 Edge 有錯，可以回報錯誤）
-    const constraints = { audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false } };
+/* 2. 可調常數 */
+const ENERGY_THRESHOLD = 0.001; // RMS 門檻 (稍微提高一點避免極度安靜時亂跳)
+const UI_INTERVAL = 50; 
+const PITCH_INTERVAL = 100; 
+const RESIZE_ANALYSER_SIZE = 2048;
+const VISUAL_GAIN = 3.0; // 新增：視覺增益，讓波形在小音量時也看得到
+
+const STANDARD_TUNING = {
+  "E2": 82.4069,
+  "A2": 110.0000,
+  "D3": 146.8324,
+  "G3": 196.0000,
+  "B3": 246.9417,
+  "E4": 329.6276
+};
+
+/* 找最近的音名 */
+function closestString(freq){
+  let bestName = null, bestF = null, bestDiff = Infinity;
+  for(const name in STANDARD_TUNING){
+    const f = STANDARD_TUNING[name];
+    const diff = Math.abs(1200 * Math.log2(freq / f));
+    if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
+  }
+  const cents = 1200 * Math.log2(freq / bestF);
+  return {name: bestName, targetF: bestF, cents: cents};
+}
+
+/* Autocorrelation 演算法 */
+function autocorrWithCheck(buffer, sampleRate){
+  const size = buffer.length;
+  let mean = 0;
+  for(let i=0;i<size;i++) mean += buffer[i];
+  mean /= size;
+  for(let i=0;i<size;i++) buffer[i] -= mean;
+
+  let zeroLag = 0;
+  for(let i=0;i<size;i++) zeroLag += buffer[i]*buffer[i];
+  if(zeroLag <= 0) return null;
+
+  let bestOffset = -1;
+  let bestCorr = 0;
+  const MIN_FREQ = 60;   // 吉他最低音 E2 約 82Hz，設寬一點
+  const MAX_FREQ = 1000; 
+  const maxLag = Math.floor(sampleRate / MIN_FREQ);
+  const minLag = Math.floor(sampleRate / MAX_FREQ);
+  
+  if(maxLag >= size) return null;
+
+  // 簡單的最佳化：若訊號不夠強，不跑耗時迴圈 (這步可以省略，現代電腦很快)
+  for(let lag = minLag; lag <= maxLag; lag++){
+    let corr = 0;
+    // 稍微減少取樣點以加速 (可選)
+    for(let i=0; i < size - lag; i++){
+      corr += buffer[i] * buffer[i + lag];
+    }
+    if(corr > bestCorr){
+      bestCorr = corr;
+      bestOffset = lag;
+    }
+  }
+
+  if(bestOffset <= 0) return null;
+
+  const norm = bestCorr / zeroLag;
+  if(norm < 0.2) return null; // 門檻
+
+  // Parabolic Interpolation
+  function autocorrLag(lag) {
+    if(lag < 1 || lag >= size) return 0;
+    let c = 0;
+    for(let i=0; i < size - lag; i++) c += buffer[i] * buffer[i + lag];
+    return c;
+  }
+  let c0 = autocorrLag(bestOffset - 1);
+  let c1 = bestCorr;
+  let c2 = autocorrLag(bestOffset + 1);
+  const denom = (c0 - 2*c1 + c2);
+  let offset = bestOffset;
+  if(denom !== 0){
+    offset = bestOffset + 0.5 * (c0 - c2) / denom;
+  }
+  
+  return sampleRate / offset;
+}
+
+/* 繪圖函式 */
+function drawWave(input, ctx, canvas) {
+  if (!ctx || !canvas) return;
+  // 清空背景
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  if (!input || input.length === 0) return;
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#007acc';
+  ctx.beginPath();
+
+  const sliceWidth = canvas.width * 1.0 / input.length;
+  let x = 0;
+
+  // 為了效能，這裡稍微簡化繪圖點數
+  // 吉他波形較單純，不需畫滿 2048 點，畫 500 點即可看清
+  const step = Math.ceil(input.length / canvas.width); 
+
+  for (let i = 0; i < canvas.width; i++) {
+    const dataIndex = Math.floor(i * step);
+    if(dataIndex >= input.length) break;
+    
+    // 加上 VISUAL_GAIN 讓小聲時波形也看得到
+    const v = input[dataIndex] * VISUAL_GAIN; 
+    
+    const y = (1 - v) * (canvas.height / 2); // 簡化的 Y 軸計算
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+
+    x += 1;
+  }
+  ctx.stroke();
+}
+
+function drawGauge(cents, gctx, gauge, noteName) {
+  if (!gctx || !gauge) return;
+  gctx.clearRect(0, 0, gauge.width, gauge.height); // 用 clearRect 處理透明背景更乾淨
+
+  const w = gauge.width;
+  const h = gauge.height;
+  const cy = h / 2;
+  const range = 50;
+  const usable = w * 0.8; // 縮窄一點讓指針不會貼邊
+  const left = (w - usable) / 2;
+
+  // 畫刻度
+  gctx.beginPath();
+  gctx.strokeStyle = '#ccc';
+  gctx.lineWidth = 2;
+  gctx.moveTo(left, cy);
+  gctx.lineTo(left + usable, cy);
+  gctx.stroke();
+
+  const marks = [-50, -25, 0, 25, 50];
+  gctx.font = '14px Arial';
+  gctx.textAlign = 'center';
+  gctx.fillStyle = '#666';
+
+  marks.forEach(m => {
+    const x = left + ((m + range) / (2 * range)) * usable;
+    gctx.beginPath();
+    gctx.moveTo(x, cy - 10);
+    gctx.lineTo(x, cy + 10);
+    gctx.strokeStyle = '#888';
+    gctx.stroke();
+    gctx.fillText(m, x, cy + 25);
+  });
+
+  // 顯示目標弦
+  if (noteName) {
+    gctx.font = 'bold 20px Arial';
+    gctx.fillStyle = '#333';
+    gctx.textAlign = 'left';
+    gctx.fillText(noteName, 10, 30);
+  }
+
+  if (cents === null || cents === undefined) return;
+
+  // 畫指針
+  const disp = Math.max(-range, Math.min(range, cents));
+  const px = left + ((disp + range) / (2 * range)) * usable;
+
+  let color = '#d9534f'; // 紅
+  if (Math.abs(disp) < 5) color = '#28a745'; // 綠
+  else if (Math.abs(disp) < 15) color = '#ffc107'; // 黃
+
+  gctx.fillStyle = color;
+  gctx.beginPath();
+  gctx.arc(px, cy, 8, 0, 2 * Math.PI);
+  gctx.fill();
+  
+  // 畫三角指標
+  gctx.beginPath();
+  gctx.moveTo(px, cy - 10);
+  gctx.lineTo(px - 6, cy - 20);
+  gctx.lineTo(px + 6, cy - 20);
+  gctx.fill();
+}
+
+/* 3. DOM 元素取得 */
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusEl = document.getElementById('status');
+const freqEl = document.getElementById('freq');
+const noteEl = document.getElementById('note');
+const centsEl = document.getElementById('cents');
+const debugEl = document.getElementById('debug'); // 之前漏了定義這個！
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const gauge = document.getElementById('gauge');
+const gctx = gauge.getContext('2d');
+
+/* Buffer */
+let afArray = null;
+let lastPitchTime = 0;
+let lastUIUpdate = 0;
+
+/* 開始按鈕 */
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  statusEl.textContent = '請求麥克風權限中...';
+  
+  try {
+    // **修正：對於部分麥克風，autoGainControl: false 會導致輸入極小**
+    // 建議先開啟 true 確保有聲音，或者移除 constraints 讓瀏覽器決定
+    const constraints = {
+      audio: {
+        echoCancellation: false,
+        autoGainControl: true,  // 改為 true，或者刪除這行
+        noiseSuppression: false 
+      }
+    };
+
     mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    // list devices
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inDevs = devices.filter(d=>d.kind==='audioinput');
-    info.innerHTML = '<b>audioinput devices:</b><br>' + inDevs.map(d=> (d.label||'無名稱') + ' (' + d.deviceId + ')').join('<br>');
+    
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     source = audioCtx.createMediaStreamSource(mediaStream);
-    zeroGain = audioCtx.createGain(); zeroGain.gain.value=0; zeroGain.connect(audioCtx.destination);
-    analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0;
-    const buf = new Float32Array(analyser.fftSize);
-    source.connect(analyser); analyser.connect(zeroGain);
-    stopBtn.disabled=false;
-    requestAnimationFrame(function loop(){
-      if(!analyser) return;
-      analyser.getFloatTimeDomainData(buf);
 
-      // compute RMS
-      let e=0; for(let i=0;i<buf.length;i++) e+=buf[i]*buf[i];
-      e=Math.sqrt(e/buf.length);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = RESIZE_ANALYSER_SIZE;
+    analyser.smoothingTimeConstant = 0; // 0 = 最即時的反應
+    afArray = new Float32Array(analyser.fftSize);
 
-      // prepare sample previews
-      const head = Array.from(buf.slice(0,16)).map(v=>v.toFixed(6)).join(', ');
-      const mid = Array.from(buf.slice(Math.floor(buf.length/2)-8, Math.floor(buf.length/2)+8)).map(v=>v.toFixed(6)).join(', ');
-      const tail = Array.from(buf.slice(-16)).map(v=>v.toFixed(6)).join(', ');
+    // 建立一個靜音的輸出，防止瀏覽器讓 AudioContext 休眠
+    zeroGain = audioCtx.createGain();
+    zeroGain.gain.value = 0;
+    
+    // 連接線路：Source -> Analyser -> ZeroGain -> Destination
+    // **修正：移除了 processor，它是不必要的並可能導致卡頓**
+    source.connect(analyser);
+    analyser.connect(zeroGain);
+    zeroGain.connect(audioCtx.destination);
 
-      // draw simple waveform
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.beginPath(); ctx.strokeStyle='#007acc'; 
-      for(let i=0;i<canvas.width;i++){
-        const v = buf[Math.floor(i * (buf.length/canvas.width))] || 0;
-        const y = (1 - (v + 1)/2) * canvas.height;
-        if(i===0) ctx.moveTo(i,y); else ctx.lineTo(i,y);
-      }
+    statusEl.textContent = "偵測中...";
+    stopBtn.disabled = false;
+
+    // 開始動畫迴圈
+    loop();
+
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "錯誤：" + err.message;
+    startBtn.disabled = false;
+  }
+});
+
+/* 停止按鈕 */
+stopBtn.addEventListener('click', () => {
+  // 停止動畫
+  if (rafId) cancelAnimationFrame(rafId);
+  
+  // 釋放資源
+  if (source) { source.disconnect(); source = null; }
+  if (analyser) { analyser.disconnect(); analyser = null; }
+  if (zeroGain) { zeroGain.disconnect(); zeroGain = null; }
+  
+  if (audioCtx && audioCtx.state !== 'closed') {
+    audioCtx.close();
+  }
+  audioCtx = null;
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+
+  // 重置 UI
+  statusEl.textContent = '已停止';
+  freqEl.textContent = '頻率: --- Hz';
+  noteEl.textContent = '音名: ---';
+  centsEl.textContent = '偏差: --- cents';
+  debugEl.textContent = '';
+  
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  gctx.clearRect(0,0,gauge.width, gauge.height);
+
+  stopBtn.disabled = true;
+  startBtn.disabled = false;
+});
+
+/* 主迴圈 */
+function loop() {
+  rafId = requestAnimationFrame(loop);
+
+  if (!analyser) return;
+  analyser.getFloatTimeDomainData(afArray);
+
+  // 計算 RMS (音量能量)
+  let sum = 0;
+  for (let i = 0; i < afArray.length; i++) sum += afArray[i]*afArray[i];
+  const rms = Math.sqrt(sum / afArray.length);
+
+  // 更新 Debug 資訊
+  if(debugEl) {
+     debugEl.textContent = `RMS: ${rms.toFixed(6)}`;
+  }
+
+  // 1. 繪製波形 (不管有沒有偵測到音高，有聲音就畫)
+  if (rms > 0.0001) {
+      drawWave(afArray, ctx, canvas);
+  } else {
+      // 畫平線
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#ddd';
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height/2);
+      ctx.lineTo(canvas.width, canvas.height/2);
       ctx.stroke();
-
-      debug.textContent = [
-        'RMS=' + e.toFixed(8),
-        '',
-        'samples head[0..15]: ' + head,
-        'samples mid[...]  : ' + mid,
-        'samples tail[-16]: ' + tail,
-        '',
-        'audioCtx.sampleRate=' + (audioCtx ? audioCtx.sampleRate : 'n/a'),
-        'analyser.fftSize=' + analyser.fftSize
-      ].join('\n');
-
-      requestAnimationFrame(loop);
-    });
-
-    info.innerHTML += '<br><b>狀態：</b>已取得麥克風';
-  } catch(err){
-    info.innerHTML = '<b>getUserMedia 錯誤：</b>' + err.name + ' - ' + err.message;
-    startBtn.disabled=false;
   }
-});
 
-stopBtn.addEventListener('click', ()=>{
-  try{
-    if(analyser) { try{ analyser.disconnect(); }catch(e){} analyser=null; }
-    if(source) { try{ source.disconnect(); }catch(e){} source=null; }
-    if(zeroGain) { try{ zeroGain.disconnect(); }catch(e){} zeroGain=null; }
-    if(audioCtx) { try{ audioCtx.close(); }catch(e){} audioCtx=null; }
-    if(mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
-  }catch(e){
-    console.warn(e);
+  // 2. 偵測音高 (有足夠音量才偵測)
+  const now = performance.now();
+  if (rms > ENERGY_THRESHOLD && (now - lastPitchTime > PITCH_INTERVAL)) {
+    lastPitchTime = now;
+    
+    // 複製一份 buffer 給計算用，避免被覆寫
+    const bufCopy = new Float32Array(afArray);
+    const freq = autocorrWithCheck(bufCopy, audioCtx.sampleRate);
+
+    if (freq && freq > 60 && freq < 1000) {
+       const res = closestString(freq);
+       
+       // UI 更新節流
+       if (now - lastUIUpdate > UI_INTERVAL) {
+         lastUIUpdate = now;
+         freqEl.textContent = `頻率: ${freq.toFixed(1)} Hz`;
+         noteEl.textContent = `音名: ${res.name} (${res.targetF.toFixed(1)} Hz)`;
+         
+         const sign = res.cents >= 0 ? '+' : '';
+         centsEl.textContent = `偏差: ${sign}${res.cents.toFixed(1)} cents`;
+         
+         drawGauge(res.cents, gctx, gauge, res.name);
+       }
+    }
   }
-  info.textContent='已停止';
-  debug.textContent='';
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  stopBtn.disabled=true;
-  startBtn.disabled=false;
-});
+}
 </script>
 </body>
 </html>
