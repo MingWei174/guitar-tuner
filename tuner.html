@@ -1,390 +1,100 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <title>吉他調音器（純前端）</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #freq { font-size: 32px; margin: 10px 0; }
-    #note { font-size: 32px; margin: 10px 0; }
-    #cents { font-size: 32px; margin: 10px 0; }
-    #startBtn, #stopBtn { padding: 8px 12px; font-size: 16px; margin-right:8px; }
-    canvas { border: 1px solid #ccc; display:block; margin-top:10px; }
-    #gauge { height: 100px; }
-    #debug { font-size: 12px; color: #666; margin-top:8px; }
-  </style>
+<meta charset="utf-8" />
+<title>調音器 Debug（samples & device info）</title>
+<style> body{font-family:Arial;padding:16px} pre{background:#f6f6f6;padding:8px;border:1px solid #ddd;}</style>
 </head>
 <body>
-  <h1>吉他調音器（純前端）</h1>
-  <button id="startBtn">開始</button>
-  <button id="stopBtn" disabled>停止</button>
-  <div id="status"></div>
-  <div id="freq">頻率: --- Hz</div>
-  <div id="note">音名: ---</div>
-  <div id="cents">偏差: --- cents</div>
-  <canvas id="canvas" width="600" height="120"></canvas>
-  <canvas id="gauge" width="600" height="120"></canvas>
+<h2>調音器 Debug 版</h2>
+<button id="start">開始</button><button id="stop" disabled>停止</button>
+<div id="info"></div>
+<pre id="debug"></pre>
+<canvas id="canvas" width="600" height="120" style="border:1px solid #ccc"></canvas>
 
 <script>
-/* 全域變數（讓 start/stop handler 共用）  py -3 -m http.server 8000  */
-let audioCtx = null;
-let source = null;
-let processor = null;
-let mediaStream = null;
+let audioCtx=null, source=null, analyser=null, mediaStream=null, zeroGain=null;
+const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
+const info=document.getElementById('info'), debug=document.getElementById('debug');
+const startBtn=document.getElementById('start'), stopBtn=document.getElementById('stop');
 
-/* 可調常數 */
-const ENERGY_THRESHOLD = 0.0002; // RMS 門檻（可根據環境微調）
-const UI_INTERVAL = 40; // ms (UI 文字更新節流)  // 原來 const UI_INTERVAL = 100; //  // 測試：更快的 UI 更新（ms）
-const PITCH_INTERVAL = 80; // ms（pitch 偵測節流）
-const RESIZE_ANALYSER_SIZE = 2048;
-
-const STANDARD_TUNING = {
-  "E2": 82.4069,
-  "A2": 110.0000,
-  "D3": 146.8324,
-  "G3": 196.0000,
-  "B3": 246.9417,
-  "E4": 329.6276
-};
-
-function closestString(freq){
-  let bestName = null, bestF = null, bestDiff = Infinity;
-  for(const name in STANDARD_TUNING){
-    const f = STANDARD_TUNING[name];
-    const diff = Math.abs(1200 * Math.log2(freq / f));
-    if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
-  }
-  const cents = 1200 * Math.log2(freq / bestF);
-  return {name: bestName, targetF: bestF, cents: cents};
-}
-
-
-/* 改良版 autocorr（含 normalized peak 檢查 與 parabolic interpolation） */
-function autocorrWithCheck(buffer, sampleRate){
-  const size = buffer.length;
-  // remove DC
-  let mean = 0;
-  for(let i=0;i<size;i++) mean += buffer[i];
-  mean /= size;
-  for(let i=0;i<size;i++) buffer[i] -= mean;
-
-  // zero-lag energy
-  let zeroLag = 0;
-  for(let i=0;i<size;i++) zeroLag += buffer[i]*buffer[i];
-  if(zeroLag <= 0) return null;
-
-
-  // compute autocorrelation via FFT could be faster, but simple time-domain is OK for small size
-  let bestOffset = -1;
-  let bestCorr = 0;
-  const MIN_FREQ = 65;
-  const MAX_FREQ = 1000;
-  const maxLag = Math.floor(sampleRate / MIN_FREQ);
-  const minLag = Math.floor(sampleRate / MAX_FREQ);
-  if(maxLag >= size) return null;
-  for(let lag = minLag; lag <= maxLag; lag++){
-    let corr = 0;
-    for(let i=0; i < size - lag; i++){
-      corr += buffer[i] * buffer[i + lag];
-    }
-    if(corr > bestCorr){
-      bestCorr = corr;
-      bestOffset = lag;
-    }
-  }
-
-  if(bestOffset <= 0) return null;
-
-  // normalized peak check
-  const norm = bestCorr / zeroLag;
-  // autocorrWithCheck 中的 norm 檢查
-  // 原來 if(norm < 0.25) return null;
-  if(norm < 0.18) return null;   // 更低門檻，對短音符更友善   // 閥值可調（0.2~0.4）
-
-  // parabolic interpolation around bestOffset for better resolution
-  function autocorrLag(lag) {
-    if(lag < 1 || lag >= size) return 0;
-    let c = 0;
-    for(let i=0; i < size - lag; i++) c += buffer[i] * buffer[i + lag];
-    return c;
-  }
-  let c0 = autocorrLag(bestOffset - 1);
-  let c1 = bestCorr; // autocorrLag(bestOffset)
-  let c2 = autocorrLag(bestOffset + 1);
-  const denom = (c0 - 2*c1 + c2);
-  let offset = bestOffset;
-  if(denom !== 0){
-    offset = bestOffset + 0.5 * (c0 - c2) / denom;
-  }
-  const freq = sampleRate / offset;
-  return freq;
-}
-
-/* 繪圖函式（重用） */
-function drawWave(input, ctx, canvas) {
-  if (!ctx || !canvas) return;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!input || input.length === 0) return;
-  ctx.strokeStyle = '#007acc';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const step = Math.max(1, Math.floor(input.length / canvas.width));
-  for (let i = 0; i < canvas.width; i++) {
-    const v = input[Math.floor(i * step)];
-    const y = (1 - (v + 1) / 2) * canvas.height;
-    if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
-  }
-  ctx.stroke();
-}
-
-function drawGauge(cents, gctx, gauge, noteName) {
-  if (!gctx || !gauge) return;
-  gctx.fillStyle = '#fff';
-  gctx.fillRect(0, 0, gauge.width, gauge.height);
-
-  const w = gauge.width;
-  const h = gauge.height;
-  const cy = h / 2;
-
-  const range = 50;
-  const usable = w * 0.9;
-  const left = (w - usable) / 2;
-
-  // 外框
-  gctx.strokeStyle = '#ddd';
-  gctx.lineWidth = 1;
-  gctx.beginPath();
-  gctx.rect(left, cy - 22, usable, 44);
-  gctx.stroke();
-
-  // 刻度
-  gctx.font = '12px Arial';
-  gctx.fillStyle = '#000';
-  const marks = [-50, -25, 0, 25, 50];
-  marks.forEach(m => {
-    const x = left + ((m + range) / (2 * range)) * usable;
-    gctx.beginPath();
-    gctx.moveTo(x, cy - 14);
-    gctx.lineTo(x, cy + 14);
-    gctx.strokeStyle = '#888';
-    gctx.lineWidth = 2;
-    gctx.stroke();
-    gctx.fillStyle = '#000';
-    gctx.textAlign = 'center';
-    gctx.fillText(m.toString(), x, cy + 30);
-  });
-
-  // 中心標線
-  gctx.strokeStyle = '#000';
-  gctx.lineWidth = 1;
-  gctx.beginPath();
-  gctx.moveTo(left + usable / 2, cy - 18);
-  gctx.lineTo(left + usable / 2, cy + 18);
-  gctx.stroke();
-
-  if (noteName) {
-    gctx.fillStyle = '#000';
-    gctx.font = '16px Arial';
-    gctx.textAlign = 'left';
-    gctx.fillText('弦: ' + noteName, 12, 22);
-  }
-
-  if (cents === null || cents === undefined) return;
-
-  const disp = Math.max(-range, Math.min(range, cents));
-  const px = left + ((disp + range) / (2 * range)) * usable;
-
-  const absC = Math.abs(disp);
-  let fillColor = '#d9534f';
-  if (absC < 5) fillColor = '#5cb85c';
-  else if (absC < 15) fillColor = '#f0ad4e';
-
-  gctx.fillStyle = fillColor;
-  gctx.beginPath();
-  gctx.moveTo(px, cy - 18);
-  gctx.lineTo(px - 8, cy - 30);
-  gctx.lineTo(px + 8, cy - 30);
-  gctx.closePath();
-  gctx.fill();
-
-  gctx.fillStyle = '#000';
-  gctx.font = '14px Arial';
-  gctx.textAlign = 'center';
-  const label = (cents >= 0 ? '+' : '') + cents.toFixed(1) + ' cents';
-  gctx.fillText(label, w/2, cy + 48);
-}
-
-/* DOM 元素 */
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const status = document.getElementById('status');
-const freqEl = document.getElementById('freq');
-const noteEl = document.getElementById('note');
-const centsEl = document.getElementById('cents');
-
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const gauge = document.getElementById('gauge');
-const gctx = gauge.getContext('2d');
-
-/* rAF 與 analyser buffer */
-let afArray = null; // Float32Array for analyser data
-let lastPitchTime = 0;
-let lastUIUpdate = 0;
-
-/* 事件：開始 */
-startBtn.addEventListener('click', async () => {
-  startBtn.disabled = true;
-  status.textContent = '取得麥克風中...';
-  try {
-     // 關閉瀏覽器預設處理（請注意：部分瀏覽器/裝置可能不支援某些選項）
-    const constraints = {
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    };
-
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+startBtn.addEventListener('click', async ()=>{
+  startBtn.disabled=true; info.textContent='正在要求麥克風...';
+  try{
+    // 先用寬鬆 constraints（若 Edge 有錯，可以回報錯誤）
+    const constraints = { audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false } };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    // list devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inDevs = devices.filter(d=>d.kind==='audioinput');
+    info.innerHTML = '<b>audioinput devices:</b><br>' + inDevs.map(d=> (d.label||'無名稱') + ' (' + d.deviceId + ')').join('<br>');
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     source = audioCtx.createMediaStreamSource(mediaStream);
+    zeroGain = audioCtx.createGain(); zeroGain.gain.value=0; zeroGain.connect(audioCtx.destination);
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0;
+    const buf = new Float32Array(analyser.fftSize);
+    source.connect(analyser); analyser.connect(zeroGain);
+    stopBtn.disabled=false;
+    requestAnimationFrame(function loop(){
+      if(!analyser) return;
+      analyser.getFloatTimeDomainData(buf);
 
-    /////////////////// 原來 const bufferSize = 4096 /////////////////////
-    const bufferSize = 2048; // 或 1024；測試哪個對你吉他/麥克風最順
+      // compute RMS
+      let e=0; for(let i=0;i<buf.length;i++) e+=buf[i]*buf[i];
+      e=Math.sqrt(e/buf.length);
 
-    processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+      // prepare sample previews
+      const head = Array.from(buf.slice(0,16)).map(v=>v.toFixed(6)).join(', ');
+      const mid = Array.from(buf.slice(Math.floor(buf.length/2)-8, Math.floor(buf.length/2)+8)).map(v=>v.toFixed(6)).join(', ');
+      const tail = Array.from(buf.slice(-16)).map(v=>v.toFixed(6)).join(', ');
 
-    // 建立 zeroGain 維持連線到 destination，但不會真的發出聲音
-    zeroGain = audioCtx.createGain();
-    zeroGain.gain.value = 0;
-    zeroGain.connect(audioCtx.destination);
-
-    // 建立analyser
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = RESIZE_ANALYSER_SIZE;
-    analyser.smoothingTimeConstant = 0; // 不做時間平滑（更即時）
-    afArray = new Float32Array(analyser.fftSize);
-
-    // connect chain: source -> analyser -> zeroGain
-    source.connect(analyser);
-    analyser.connect(zeroGain);
-
-    // optional: 若你想要同時在 audio callback 取得 buffer 作更精細的 energy 判斷，也可以建立 ScriptProcessor
-    // 但這裡不必要，analyser.getFloatTimeDomainData 已可取得樣本
-
-    // 連線（processor 為輸入 node）；connect 到 zeroGain 再到 destination，能確保 onaudioprocess 不會被瀏覽器暫停
-    source.connect(processor);
-    processor.connect(zeroGain);
-
-    status.textContent = "已取得麥克風，開始分析中...";
-    
-    // 啟用停止按鈕
-    stopBtn.disabled = false;
-    requestAnimationFrame(drawLoop);
-    // 也可以立即跑一次 gauge 清空
-    drawGauge(null, gctx, gauge, null);
-
-
-  } catch (err) {
-    status.textContent = "無法取得麥克風：" + err.message;
-    startBtn.disabled = false;
-  }
-});
-
-// 綁 stop 事件
-stopBtn.addEventListener('click', () => {
-  // 防護：只有在有資源時才執行釋放
-  try {
-    if (processor) {
-      try { processor.disconnect(); } catch (e) {}
-      processor.onaudioprocess = null;
-      processor = null;
-    }
-    if (source) {
-      try { source.disconnect(); } catch (e) {}
-      source = null;
-    }
-    if (zeroGain) {
-      try { zeroGain.disconnect(); } catch (e) {}
-      zeroGain = null;
-    }
-    if (audioCtx) {
-      try { audioCtx.close(); } catch (e) {}
-      audioCtx = null;
-    }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      mediaStream = null;
-    }
-  } catch (err) {
-    console.warn('停止時發生錯誤', err);
-  }
-
-  status.textContent = '已停止。';
-  freqEl.textContent = '頻率: --- Hz';
-  noteEl.textContent = '音名: ---';
-  centsEl.textContent = '偏差: --- cents';
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  gctx.clearRect(0,0,gauge.width,gauge.height);
-  debugEl.textContent = '';
-  stopBtn.disabled = true;
-  startBtn.disabled = false;
-});
-
-/* drawLoop：用 rAF 取 analyser 資料並畫出 waveform；同時節流做 pitch 偵測 */
-/* drawLoop */
-function drawLoop(){
-  if (!analyser || !audioCtx) return;
-  analyser.getFloatTimeDomainData(afArray);
-
-  // 計算 RMS 並顯示（debug）
-  let energy = 0;
-  for (let i = 0; i < afArray.length; i++) energy += afArray[i]*afArray[i];
-  energy = Math.sqrt(energy / afArray.length);
-
-  // 把前 10 個 sample 印出來做偵錯（可取消）
-  const samplePreview = Array.from(afArray.slice(0,10)).map(v => v.toFixed(4)).join(', ');
-
-  debugEl.textContent = 'RMS=' + energy.toFixed(6) + ' | samples[0..9]: ' + samplePreview;
-
-  if (energy < ENERGY_THRESHOLD) {
-    // 畫中心線（避免閃爍）
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#c0e6ff';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height/2);
-    ctx.lineTo(canvas.width, canvas.height/2);
-    ctx.stroke();
-    status.textContent = '訊號過小 (RMS=' + energy.toFixed(6) + ')';
-  } else {
-    status.textContent = '偵測中 (RMS=' + energy.toFixed(6) + ')';
-    drawWave(afArray, ctx, canvas);
-  }
-
-  const now = performance.now();
-  if (now - lastPitchTime >= PITCH_INTERVAL && energy >= ENERGY_THRESHOLD) {
-    lastPitchTime = now;
-    const buf = new Float32Array(afArray); // 複本
-    const freq = autocorrWithCheck(buf, audioCtx.sampleRate);
-    if (freq && isFinite(freq) && freq >= 20 && freq <= 5000) {
-      const res = closestString(freq);
-      if (now - lastUIUpdate >= UI_INTERVAL) {
-        lastUIUpdate = now;
-        freqEl.textContent = '頻率: ' + freq.toFixed(1) + ' Hz';
-        noteEl.textContent = '音名: ' + res.name + ' (' + res.targetF.toFixed(1) + ' Hz)';
-        centsEl.textContent = '偏差: ' + (res.cents >= 0 ? '+' : '') + res.cents.toFixed(1) + ' cents';
-        drawGauge(res.cents, gctx, gauge, res.name);
+      // draw simple waveform
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.beginPath(); ctx.strokeStyle='#007acc'; 
+      for(let i=0;i<canvas.width;i++){
+        const v = buf[Math.floor(i * (buf.length/canvas.width))] || 0;
+        const y = (1 - (v + 1)/2) * canvas.height;
+        if(i===0) ctx.moveTo(i,y); else ctx.lineTo(i,y);
       }
-    }
+      ctx.stroke();
+
+      debug.textContent = [
+        'RMS=' + e.toFixed(8),
+        '',
+        'samples head[0..15]: ' + head,
+        'samples mid[...]  : ' + mid,
+        'samples tail[-16]: ' + tail,
+        '',
+        'audioCtx.sampleRate=' + (audioCtx ? audioCtx.sampleRate : 'n/a'),
+        'analyser.fftSize=' + analyser.fftSize
+      ].join('\n');
+
+      requestAnimationFrame(loop);
+    });
+
+    info.innerHTML += '<br><b>狀態：</b>已取得麥克風';
+  } catch(err){
+    info.innerHTML = '<b>getUserMedia 錯誤：</b>' + err.name + ' - ' + err.message;
+    startBtn.disabled=false;
   }
+});
 
-  requestAnimationFrame(drawLoop);
-}
-
+stopBtn.addEventListener('click', ()=>{
+  try{
+    if(analyser) { try{ analyser.disconnect(); }catch(e){} analyser=null; }
+    if(source) { try{ source.disconnect(); }catch(e){} source=null; }
+    if(zeroGain) { try{ zeroGain.disconnect(); }catch(e){} zeroGain=null; }
+    if(audioCtx) { try{ audioCtx.close(); }catch(e){} audioCtx=null; }
+    if(mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
+  }catch(e){
+    console.warn(e);
+  }
+  info.textContent='已停止';
+  debug.textContent='';
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  stopBtn.disabled=true;
+  startBtn.disabled=false;
+});
 </script>
 </body>
 </html>
