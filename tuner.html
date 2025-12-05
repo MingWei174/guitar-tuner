@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>吉他調音器 (穩定融合版)</title>
+<title>吉他調音器 (專業介面版)</title>
 <style>
     :root {
-        --bg-color: #1e2126;
-        --card-bg: #2a2e35;
+        --bg-color: #212529; /* 深色背景 */
+        --card-bg: #2b3035;   /* 卡片背景 */
         --text-main: #ffffff;
-        --text-sub: #8b9bb4;
-        --accent-green: #4caf50;
-        --accent-red: #ff4d4d;
-        --accent-blue: #4fc3f7;
+        --text-sub: #adb5bd;
+        --accent-green: #2ecc71; /* 亮綠色 */
+        --accent-red: #e74c3c;   /* 亮紅色 */
+        --accent-blue: #3498db;  /* 亮藍色 */
     }
 
     body {
@@ -40,59 +40,70 @@
         box-sizing: border-box;
     }
 
-    h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    h1 { font-size: 20px; margin: 0; font-weight: 600; letter-spacing: 1px; }
 
     .rec-btn {
-        background: #333;
-        border: 1px solid #555;
+        background: #343a40;
+        border: 1px solid #495057;
         color: #fff;
-        padding: 8px 16px;
+        padding: 6px 14px;
         border-radius: 20px;
-        font-weight: bold;
+        font-weight: 600;
+        font-size: 14px;
         cursor: pointer;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
+        transition: all 0.2s;
     }
     .rec-dot {
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
         background-color: var(--accent-red);
         border-radius: 50%;
     }
     .rec-btn.recording {
-        background-color: rgba(255, 77, 77, 0.2);
+        background-color: rgba(231, 76, 60, 0.2);
         border-color: var(--accent-red);
+        color: var(--accent-red);
     }
     .rec-btn.recording .rec-dot { animation: blink 1s infinite; }
 
     /* --- Controls --- */
-    .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+    .controls { display: flex; gap: 15px; margin-bottom: 15px; }
     .main-btn {
-        background: var(--accent-green);
-        color: white;
+        background: var(--accent-green); /* 綠色開始鈕 */
+        color: #fff;
         border: none;
-        padding: 12px 30px;
+        padding: 12px 32px;
         border-radius: 30px;
-        font-size: 18px;
+        font-size: 16px;
+        font-weight: bold;
         cursor: pointer;
-        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+        transition: transform 0.1s;
     }
-    .main-btn:disabled { background: #555; color: #aaa; box-shadow: none; }
-    .stop-btn { background: var(--accent-red); box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3); }
+    .main-btn:active { transform: scale(0.96); }
+    .main-btn:disabled { background: #495057; color: #868e96; box-shadow: none; cursor: not-allowed; }
+    
+    .stop-btn { 
+        background: var(--accent-red); 
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    }
 
     /* --- Main Display --- */
     .tuner-body {
         background-color: var(--card-bg);
-        width: 90%;
-        max-width: 400px;
-        border-radius: 20px;
-        padding: 20px;
+        width: 92%;
+        max-width: 420px;
+        border-radius: 24px;
+        padding: 25px 20px;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
         display: flex;
         flex-direction: column;
         align-items: center;
+        border: 1px solid #3a3f45;
     }
 
     .info-row {
@@ -101,53 +112,69 @@
         width: 100%;
         color: var(--text-sub);
         font-size: 12px;
-        margin-bottom: 10px;
+        margin-bottom: 5px;
+        padding: 0 10px;
+        box-sizing: border-box;
     }
 
+    /* 畫布 */
     #gaugeCanvas {
         width: 100%;
         height: auto;
-        max-height: 150px;
+        /* 保持寬高比，讓它不會被拉伸 */
+        display: block;
         margin-top: 10px;
+        margin-bottom: 0px;
     }
 
     .note-display {
-        font-size: 80px;
-        font-weight: 700;
-        margin: 5px 0;
+        font-size: 90px;
+        font-weight: 800;
+        margin: 0;
+        line-height: 1;
         color: var(--text-main);
+        text-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
     
     .cents-badge {
-        background: #181a1e;
-        padding: 5px 15px;
-        border-radius: 10px;
-        border: 1px solid #444;
-        font-size: 18px;
+        background: #212529;
+        padding: 4px 12px;
+        border-radius: 8px;
+        border: 1px solid #495057;
+        font-size: 16px;
+        font-weight: 600;
         color: var(--accent-blue);
-        min-width: 80px;
+        min-width: 70px;
         display: inline-block;
+        margin-bottom: 5px;
     }
 
-    .freq-detail { font-size: 14px; color: var(--text-sub); margin-top: 5px; }
+    .freq-detail { 
+        font-size: 14px; 
+        color: var(--text-sub); 
+        margin-top: 5px; 
+        font-family: monospace; 
+    }
 
     /* --- Waveform --- */
     .visualizer-container {
-        width: 90%;
-        max-width: 400px;
-        margin-top: 20px;
-        background: #111;
-        border-radius: 10px;
+        width: 92%;
+        max-width: 420px;
+        height: 100px;
+        margin-top: 15px;
+        background: #1a1d20;
+        border-radius: 12px;
         overflow: hidden;
-        border: 1px solid #444;
+        border: 1px solid #3a3f45;
         position: relative;
     }
-    #waveCanvas { width: 100%; height: 120px; display: block; }
+    #waveCanvas { width: 100%; height: 100%; display: block; }
     
     /* --- Footer --- */
-    #status { margin-top: 15px; color: var(--text-sub); font-style: italic; white-space: pre-wrap; word-break: break-all;}
-    #audioLinkContainer { margin-top: 10px; }
-    a.download-link { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dashed; }
+    #status { margin-top: 20px; color: var(--text-sub); font-size: 13px; font-style: italic;}
+    #audioLinkContainer { margin-top: 15px; width: 90%; text-align: center; }
+    a.download-link { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dashed; font-size: 14px; display: block; margin-top: 5px;}
+    audio { width: 100%; margin-top: 5px; height: 36px; }
     
     @keyframes blink { 50% { opacity: 0; } }
 </style>
@@ -155,7 +182,7 @@
 <body>
 
     <header>
-        <div style="font-size: 24px; color: #666;">☰</div>
+        <div style="font-size: 20px; color: #6c757d;">☰</div>
         <h1>吉他調音器</h1>
         <button id="recBtn" class="rec-btn" disabled>
             <span class="rec-dot"></span> REC
@@ -170,10 +197,10 @@
     <div class="tuner-body">
         <div class="info-row">
             <span>A4 = 440Hz</span>
-            <span id="debugInfo">RMS: 0.00</span>
+            <span id="debugInfo">RMS: 0.0000</span>
         </div>
 
-        <canvas id="gaugeCanvas" width="600" height="300"></canvas>
+        <canvas id="gaugeCanvas" width="600" height="340"></canvas>
 
         <div class="cents-badge" id="cents">0¢</div>
         <div class="note-display" id="note">--</div>
@@ -181,15 +208,15 @@
     </div>
 
     <div class="visualizer-container">
-        <canvas id="waveCanvas" width="600" height="120"></canvas>
+        <canvas id="waveCanvas" width="600" height="150"></canvas>
     </div>
 
-    <div id="status">準備就緒</div>
+    <div id="status">準備就緒，請按下開始</div>
     <div id="audioLinkContainer"></div>
 
 <script>
 /* ==============================
-   1. 變數與設定 (來自舊版)
+   1. 變數與設定
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -203,18 +230,14 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
-// 參數 (來自舊版)
-const ENERGY_THRESHOLD = 0.002; // 稍微提高一點點以防萬一
+// 參數
+const ENERGY_THRESHOLD = 0.002; 
 const RESIZE_ANALYSER_SIZE = 2048;
-const VISUAL_GAIN = 3.0; // 視覺增益
+const VISUAL_GAIN = 3.0; 
 
 const STANDARD_TUNING = {
-  "E2": 82.4069,
-  "A2": 110.0000,
-  "D3": 146.8324,
-  "G3": 196.0000,
-  "B3": 246.9417,
-  "E4": 329.6276
+  "E2": 82.4069, "A2": 110.0000, "D3": 146.8324,
+  "G3": 196.0000, "B3": 246.9417, "E4": 329.6276
 };
 
 // UI 元素
@@ -237,21 +260,15 @@ let afArray = null;
 let lastPitchTime = 0;
 
 /* ==============================
-   2. 演算法 (完全保留舊版邏輯)
+   2. 演算法
    ============================== */
-
-// 找最近的音名
 function closestString(freq){
   let bestName = "--", bestF = freq, bestDiff = Infinity;
-  
-  // 先找標準弦
   for(const name in STANDARD_TUNING){
     const f = STANDARD_TUNING[name];
     const diff = Math.abs(1200 * Math.log2(freq / f));
     if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
   }
-
-  // 如果離標準弦太遠 (>200 cents)，改顯示通用音名
   if(bestDiff > 200) { 
       const noteNum = 12 * (Math.log2(freq / 440)) + 69;
       const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -260,12 +277,10 @@ function closestString(freq){
       bestName = noteNames[nameIdx];
       bestF = 440 * Math.pow(2, (rounded - 69) / 12);
   }
-
   const cents = 1200 * Math.log2(freq / bestF);
   return {name: bestName, targetF: bestF, cents: cents};
 }
 
-// Autocorrelation 演算法 (舊版)
 function autocorrWithCheck(buffer, sampleRate){
   const size = buffer.length;
   let mean = 0;
@@ -288,22 +303,16 @@ function autocorrWithCheck(buffer, sampleRate){
 
   for(let lag = minLag; lag <= maxLag; lag++){
     let corr = 0;
-    // 簡單優化: 間隔取樣以加速 (舊版邏輯)
     for(let i=0; i < size - lag; i++){
       corr += buffer[i] * buffer[i + lag];
     }
-    if(corr > bestCorr){
-      bestCorr = corr;
-      bestOffset = lag;
-    }
+    if(corr > bestCorr){ bestCorr = corr; bestOffset = lag; }
   }
-
   if(bestOffset <= 0) return null;
 
   const norm = bestCorr / zeroLag;
-  if(norm < 0.2) return null; // 相關性門檻
+  if(norm < 0.2) return null; 
 
-  // Parabolic Interpolation
   function autocorrLag(lag) {
     if(lag < 1 || lag >= size) return 0;
     let c = 0;
@@ -315,138 +324,178 @@ function autocorrWithCheck(buffer, sampleRate){
   let c2 = autocorrLag(bestOffset + 1);
   const denom = (c0 - 2*c1 + c2);
   let offset = bestOffset;
-  if(denom !== 0){
-    offset = bestOffset + 0.5 * (c0 - c2) / denom;
-  }
+  if(denom !== 0) offset = bestOffset + 0.5 * (c0 - c2) / denom;
   
   return sampleRate / offset;
 }
 
 /* ==============================
-   3. 繪圖 (改編自舊版，適應新風格)
+   3. 繪圖 (全新設計)
    ============================== */
 
-// 畫波形 (線條版 - 穩定不卡頓)
+// 畫波形 (線條版 - 螢光綠)
 function drawWave(input, ctx, canvas) {
   if (!ctx || !canvas) return;
-  // 清空背景 (透明/深色)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
   if (!input || input.length === 0) return;
 
-  ctx.lineWidth = 3; // 線條加粗
-  ctx.strokeStyle = '#4caf50'; // 改成螢光綠
+  ctx.lineWidth = 2; 
+  ctx.strokeStyle = '#2ecc71'; // 螢光綠
   ctx.beginPath();
 
-  const sliceWidth = canvas.width * 1.0 / input.length;
-  let x = 0;
-  // 簡化繪圖點數
   const step = Math.ceil(input.length / canvas.width); 
-
+  let x = 0;
   for (let i = 0; i < canvas.width; i++) {
     const dataIndex = Math.floor(i * step);
     if(dataIndex >= input.length) break;
-    
-    // VISUAL_GAIN
     const v = input[dataIndex] * VISUAL_GAIN; 
     const y = (1 - v) * (canvas.height / 2);
-
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
-
     x += 1;
   }
   ctx.stroke();
 }
 
-// 畫半圓形儀表板 (新版外觀，邏輯簡單化)
+// ★★★ 全新儀表板繪製邏輯 ★★★
 function drawGauge(cents) {
     const w = gaugeCanvas.width;
     const h = gaugeCanvas.height;
     const cx = w / 2;
-    const cy = h - 20;
-    const radius = h - 40;
+    const cy = h - 40; // 圓心稍微往上，留空間給數字
+    const radius = h - 80;
 
     gctx.clearRect(0, 0, w, h);
-    
-    // 背景弧線
-    gctx.beginPath();
-    gctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
-    gctx.lineWidth = 15;
-    gctx.strokeStyle = '#222'; // 深色軌道
-    gctx.stroke();
 
-    // 畫刻度
+    // 1. 畫 "準確區" (Target Sector) - 綠色扇形背景
+    // 範圍: -10 cents 到 +10 cents
+    gctx.save();
+    gctx.beginPath();
+    gctx.moveTo(cx, cy);
+    // 角度換算: -50=PI, +50=2PI. 每 cent = PI/100 弧度
+    // PI + PI/2 = 1.5PI (中央)
+    // -10 cents => 1.5PI - (10 * PI/100) = 1.4PI
+    // +10 cents => 1.5PI + (10 * PI/100) = 1.6PI
+    const startAngle = Math.PI * 1.4;
+    const endAngle = Math.PI * 1.6;
+    
+    gctx.arc(cx, cy, radius + 20, startAngle, endAngle);
+    gctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; // 半透明綠色
+    gctx.fill();
+    gctx.restore();
+
+    // 2. 畫刻度線 (Ticks)
     gctx.save();
     gctx.translate(cx, cy);
-    for (let i = 0; i <= 40; i++) {
-        const angle = Math.PI + (Math.PI * i / 40);
-        const isCenter = i === 20;
-        const isMajor = i % 5 === 0;
+    // 總範圍 -50 到 +50
+    for (let i = -50; i <= 50; i+=2) { // 每2單位一格
+        // 角度: map -50..+50 to PI..2PI
+        // angle = PI + (i + 50)/100 * PI
+        const angle = Math.PI + ((i + 50) / 100) * Math.PI;
         
-        const innerR = radius - (isMajor ? 20 : 10);
-        const outerR = radius;
+        const isCenter = (i === 0);
+        const isMajor = (i % 10 === 0); // 每10單位一個大刻度
+        
+        // 顏色邏輯: 接近0是綠色，其他是白色/灰色
+        let color = '#6c757d'; // 預設深灰
+        if (Math.abs(i) <= 10) color = '#2ecc71'; // 綠色區域
+        else if (isMajor) color = '#adb5bd'; // 大刻度亮一點
+        
+        // 長度邏輯
+        const len = isCenter ? 25 : (isMajor ? 15 : 8);
+        const thickness = isCenter ? 3 : (isMajor ? 2 : 1);
+        
+        const innerR = radius;
+        const outerR = radius + len;
         
         gctx.beginPath();
         gctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
         gctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
-        
-        gctx.lineWidth = isCenter ? 4 : 2;
-        gctx.strokeStyle = isCenter ? '#4caf50' : '#555';
+        gctx.lineWidth = thickness;
+        gctx.strokeStyle = color;
         gctx.stroke();
+
+        // 3. 畫數字 (Numbers)
+        // 只在 -50, -20, 0, +20, +50 顯示數字
+        const showNumbers = [-50, -20, 0, 20, 50];
+        if (showNumbers.includes(i)) {
+            const textRadius = radius - 25; // 數字在內圈
+            const tx = Math.cos(angle) * textRadius;
+            const ty = Math.sin(angle) * textRadius;
+            
+            gctx.save();
+            gctx.translate(tx, ty);
+            gctx.rotate(angle - Math.PI/2); // 讓文字轉正 (可選，這裡選擇轉正)
+            // 或是不要轉正，直接平放：
+            // gctx.rotate(0); 
+            
+            gctx.fillStyle = (i === 0) ? '#2ecc71' : '#868e96';
+            gctx.font = (i === 0) ? 'bold 18px Arial' : '14px Arial';
+            gctx.textAlign = 'center';
+            gctx.textBaseline = 'middle';
+            
+            // 如果不旋轉畫布，文字會是歪的，所以簡單處理：
+            // 這裡為了閱讀方便，我們不旋轉文字，而是直接畫在座標上
+            gctx.restore(); // 還原旋轉
+            
+            // 重新計算文字位置 (不旋轉)
+            gctx.font = (i === 0) ? 'bold 20px Arial' : '16px Arial';
+            gctx.fillStyle = (i === 0) ? '#2ecc71' : '#6c757d';
+            gctx.fillText(i, tx, ty);
+        }
     }
     gctx.restore();
 
-    // 指針
+    // 4. 畫指針 (Needle)
     let safeCents = cents;
-    // 如果是 -999，代表歸零
-    if (cents === -999 || cents === null) safeCents = 0;
-    safeCents = Math.max(-50, Math.min(50, safeCents));
+    if (cents === -999 || cents === null) safeCents = -50; // 歸零時指到最左邊或中間? 這裡設為最左邊比較像沒訊號，或者設為 0
+    // 為了美觀，歸零設為 -90 (消失) 或 0 (中間)。通常設為 0 並變灰。
+    // 這裡設為如果不顯示，就不畫指針
+    if(cents === -999) return; 
 
-    const angle = Math.PI + (Math.PI * (safeCents + 50) / 100);
+    safeCents = Math.max(-50, Math.min(50, safeCents));
+    const needleAngle = Math.PI + ((safeCents + 50) / 100) * Math.PI;
+    
+    const needleLen = radius + 10;
+    const nx = cx + Math.cos(needleAngle) * needleLen;
+    const ny = cy + Math.sin(needleAngle) * needleLen;
+
     gctx.beginPath();
     gctx.moveTo(cx, cy);
-    gctx.lineTo(cx + Math.cos(angle) * (radius - 10), cy + Math.sin(angle) * (radius - 10));
-    gctx.lineWidth = 5;
-    gctx.strokeStyle = (cents === -999) ? '#444' : (Math.abs(safeCents) < 5 ? '#4caf50' : '#ff4d4d');
+    gctx.lineTo(nx, ny);
+    gctx.lineWidth = 4;
+    // 顏色: 準確(+-5)變綠，偏離變紅
+    gctx.strokeStyle = (Math.abs(safeCents) < 5) ? '#2ecc71' : '#e74c3c';
+    gctx.lineCap = 'round';
     gctx.stroke();
     
-    // 圓心
+    // 指針中心蓋子
     gctx.beginPath();
-    gctx.arc(cx, cy, 10, 0, 2*Math.PI);
-    gctx.fillStyle = '#444';
+    gctx.arc(cx, cy, 8, 0, 2*Math.PI);
+    gctx.fillStyle = '#495057';
     gctx.fill();
 }
 
 /* ==============================
-   4. 主控制流程 (舊版邏輯)
+   4. 主控制流程
    ============================== */
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  statusEl.textContent = '請求權限中...';
+  statusEl.textContent = '初始化中...';
   
   try {
-    // 確保 Context 喚醒 (新版修正)
     if(audioCtx && audioCtx.state === 'suspended') {
         await audioCtx.resume();
     }
 
     const constraints = {
-      audio: {
-        echoCancellation: false,
-        autoGainControl: true, 
-        noiseSuppression: false,
-        latency: 0
-      }
+      audio: { echoCancellation: false, autoGainControl: true, noiseSuppression: false, latency: 0 }
     };
 
     mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
     source = audioCtx.createMediaStreamSource(mediaStream);
 
-    // --- 關鍵：舊版濾波器 (濾掉 0.0001 雜訊) ---
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass'; 
     filter.frequency.value = 1000; 
@@ -459,17 +508,15 @@ startBtn.addEventListener('click', async () => {
     zeroGain = audioCtx.createGain();
     zeroGain.gain.value = 0;
     
-    // 連接
     source.connect(filter);
     filter.connect(analyser);
     analyser.connect(zeroGain);
     zeroGain.connect(audioCtx.destination);
 
-    statusEl.textContent = "偵測中...";
+    statusEl.textContent = "偵測中...請撥弦";
     stopBtn.disabled = false;
     recBtn.disabled = false;
 
-    // 重置介面
     drawGauge(-999);
     loop();
 
@@ -484,15 +531,12 @@ stopBtn.addEventListener('click', () => {
   if (rafId) cancelAnimationFrame(rafId);
   if (isRecording) stopRecording();
 
-  // 釋放資源
   if (source) { source.disconnect(); source = null; }
-  // 不要 close audioCtx，避免手機上無法重啟，改用 disconnect 即可
   if (mediaStream) {
     mediaStream.getTracks().forEach(t => t.stop());
     mediaStream = null;
   }
 
-  // 重置 UI
   statusEl.textContent = '已停止';
   freqEl.textContent = '0.0 Hz';
   noteEl.textContent = '--';
@@ -507,26 +551,22 @@ stopBtn.addEventListener('click', () => {
   recBtn.disabled = true;
 });
 
-/* 主迴圈 (舊版邏輯) */
 function loop() {
   rafId = requestAnimationFrame(loop);
 
   if (!analyser) return;
   analyser.getFloatTimeDomainData(afArray);
 
-  // 計算 RMS
   let sum = 0;
   for (let i = 0; i < afArray.length; i++) sum += afArray[i]*afArray[i];
   const rms = Math.sqrt(sum / afArray.length);
 
   if(debugEl) debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
 
-  // 1. 繪製波形 (新風格線條)
   if (rms > 0.0001) {
       drawWave(afArray, wctx, waveCanvas);
   } else {
       wctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
-      // 畫一條平線
       wctx.beginPath();
       wctx.moveTo(0, waveCanvas.height/2);
       wctx.lineTo(waveCanvas.width, waveCanvas.height/2);
@@ -535,12 +575,9 @@ function loop() {
       wctx.stroke();
   }
 
-  // 2. 偵測音高
   const now = performance.now();
-  // 這裡沿用舊版的判斷，因為有 Filter，RMS 不會亂跳
   if (rms > ENERGY_THRESHOLD && (now - lastPitchTime > 100)) { 
     lastPitchTime = now;
-    
     const bufCopy = new Float32Array(afArray);
     const freq = autocorrWithCheck(bufCopy, audioCtx.sampleRate);
 
@@ -552,21 +589,20 @@ function loop() {
        
        const sign = res.cents >= 0 ? '+' : '';
        centsEl.textContent = `${sign}${Math.round(res.cents)}¢`;
-       centsEl.style.color = Math.abs(res.cents) < 10 ? '#4caf50' : '#4fc3f7';
+       
+       if(Math.abs(res.cents) < 5) centsEl.style.color = '#2ecc71';
+       else centsEl.style.color = '#4fc3f7';
        
        drawGauge(res.cents);
     }
   } else if (rms < ENERGY_THRESHOLD) {
-      // 簡單的歸零機制
-      // 為了不閃爍，我們可以不立即歸零，或者讓指針變灰
-      // 這裡選擇保留最後數值但變灰，或依你的需求歸零
-      // 參考舊版是不歸零的，但我把指針變灰表示沒訊號
+      // 保持安靜時指針消失或歸零
       drawGauge(-999);
   }
 }
 
 /* ==============================
-   5. 錄音功能 (新版功能整合進來)
+   5. 錄音功能
    ============================== */
 recBtn.addEventListener('click', () => {
     if(!mediaStream) return;
@@ -580,9 +616,15 @@ recBtn.addEventListener('click', () => {
             const a = document.createElement('a');
             a.href = url;
             a.download = `rec_${Date.now()}.webm`;
-            a.textContent = '下載錄音';
+            a.textContent = '下載錄音檔';
             a.className = 'download-link';
+            
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = url;
+
             audioLinkContainer.innerHTML = '';
+            audioLinkContainer.append(audio);
             audioLinkContainer.append(a);
             statusEl.textContent = '錄音完成';
         };
@@ -595,7 +637,6 @@ recBtn.addEventListener('click', () => {
         recBtn.classList.remove('recording');
     }
 });
-
 function stopRecording() {
     if (mediaRecorder && isRecording) {
         mediaRecorder.stop();
@@ -604,12 +645,11 @@ function stopRecording() {
     }
 }
 
-// 初始化畫面
+// 初始化
 drawGauge(-999);
-// 畫平線
 wctx.beginPath();
-wctx.moveTo(0, 60);
-wctx.lineTo(600, 60);
+wctx.moveTo(0, 75);
+wctx.lineTo(600, 75);
 wctx.strokeStyle = '#333';
 wctx.stroke();
 </script>
