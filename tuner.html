@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>專業吉他調音器 (穩定版)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>吉他調音器 (極速穩定版)</title>
 <style>
     :root {
         --bg-color: #1e2126;
@@ -24,7 +24,9 @@
         flex-direction: column;
         align-items: center;
         min-height: 100vh;
-        overflow-x: hidden; /* 防止左右滑動 */
+        overflow-x: hidden;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
     }
 
     /* --- Header --- */
@@ -76,7 +78,7 @@
         cursor: pointer;
         box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
     }
-    .main-btn:disabled { background: #555; box-shadow: none; }
+    .main-btn:disabled { background: #555; color: #aaa; box-shadow: none; }
     .stop-btn { background: var(--accent-red); box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3); }
 
     /* --- Main Display --- */
@@ -187,19 +189,7 @@
 
 <script>
 /* ==============================
-   全局錯誤捕捉 (Global Error Handler)
-   ============================== */
-window.onerror = function(msg, url, lineNo, columnNo, error) {
-    const statusEl = document.getElementById('status');
-    if(statusEl) {
-        statusEl.style.color = '#ff4d4d';
-        statusEl.textContent = `⚠️ 程式錯誤: ${msg} (Line: ${lineNo})`;
-    }
-    return false;
-};
-
-/* ==============================
-   1. 變數宣告
+   1. 變數宣告與設定
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -210,22 +200,24 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
-// 關鍵變數：確保這裡有被初始化
+// 關鍵變數：預先宣告，重複使用
 let silenceTimer = 0; 
+let afArray = null; // 聲音資料陣列
+let pitchBuffer = null; // 複製給音高計算用的陣列
+const rmsHistory = new Array(150).fill(0); // [優化] 改用陣列紀錄波形，不操壞 Canvas
 
-const ENERGY_THRESHOLD = 0.001;
+const ENERGY_THRESHOLD = 0.0015;
 const STANDARD_TUNING = {
     "E2": 82.41, "A2": 110.00, "D3": 146.83, 
     "G3": 196.00, "B3": 246.94, "E4": 329.63
 };
 
-// Canvas Contexts
+// Elements
 const gaugeCanvas = document.getElementById('gaugeCanvas');
 const gctx = gaugeCanvas.getContext('2d');
 const waveCanvas = document.getElementById('waveCanvas');
 const wctx = waveCanvas.getContext('2d');
 
-// Elements
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const recBtn = document.getElementById('recBtn');
@@ -236,224 +228,213 @@ const freqEl = document.getElementById('freq');
 const debugEl = document.getElementById('debugInfo');
 const audioLinkContainer = document.getElementById('audioLinkContainer');
 
-let afArray = null;
 let lastPitchTime = 0;
 
 /* ==============================
-   2. 核心邏輯
+   2. 核心邏輯 (無記憶體配置)
    ============================== */
 function closestString(freq) {
-    // 安全檢查：防止 freq 為 NaN 或 Infinity 導致當機
     if (!freq || !isFinite(freq)) return {name: '--', targetF: 440, cents: 0};
-
-    let bestName = null, bestF = null, bestDiff = Infinity;
+    let bestName = "--", bestF = freq, bestDiff = Infinity;
+    
     for (const name in STANDARD_TUNING) {
         const f = STANDARD_TUNING[name];
         const diff = Math.abs(1200 * Math.log2(freq / f));
         if (diff < bestDiff) { bestName = name; bestF = f; bestDiff = diff; }
     }
-
-    if (bestDiff > 200) {
+    if (bestDiff > 200) { // 擴充範圍
         const noteNum = 12 * (Math.log2(freq / 440)) + 69;
         const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const rounded = Math.round(noteNum);
-        // 安全取餘數
         const nameIdx = ((rounded % 12) + 12) % 12;
-        bestName = noteNames[nameIdx] || "?";
+        bestName = noteNames[nameIdx];
         bestF = 440 * Math.pow(2, (rounded - 69) / 12);
     }
-    
-    // 防止 bestF 計算錯誤
-    if (!bestF || isNaN(bestF)) bestF = freq;
-
     const cents = 1200 * Math.log2(freq / bestF);
     return { name: bestName, targetF: bestF, cents: isNaN(cents) ? 0 : cents };
 }
 
 function autocorrWithCheck(buffer, sampleRate) {
-    const size = buffer.length;
+    // 簡單優化版 Autocorrelation
     let sumSq = 0;
-    for (let i = 0; i < size; i++) sumSq += buffer[i] * buffer[i];
-    if (sumSq < 0.005) return null;
+    for (let i = 0; i < buffer.length; i++) sumSq += buffer[i] * buffer[i];
+    if (sumSq < 0.005) return null; // 聲音太小直接略過
 
     let bestOffset = -1;
     let bestCorr = 0;
     const minLag = Math.floor(sampleRate / 1000);
     const maxLag = Math.floor(sampleRate / 60);
 
+    // 降低取樣率來加速計算 (i+=2)
     for (let lag = minLag; lag <= maxLag; lag++) {
         let corr = 0;
-        for (let i = 0; i < size - lag; i += 2) corr += buffer[i] * buffer[i + lag];
+        for (let i = 0; i < buffer.length - lag; i += 2) corr += buffer[i] * buffer[i + lag];
         if (corr > bestCorr) { bestCorr = corr; bestOffset = lag; }
     }
-    
     if (bestOffset <= 0) return null;
     return sampleRate / bestOffset;
 }
 
 /* ==============================
-   3. 繪圖
+   3. 輕量化繪圖
    ============================== */
 function drawGauge(cents) {
-    try {
-        const w = gaugeCanvas.width;
-        const h = gaugeCanvas.height;
-        const cx = w / 2;
-        const cy = h - 20;
-        const radius = h - 40;
+    const w = gaugeCanvas.width;
+    const h = gaugeCanvas.height;
+    const cx = w / 2;
+    const cy = h - 20;
+    const radius = h - 40;
 
-        gctx.clearRect(0, 0, w, h);
-        gctx.beginPath();
-        gctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
-        gctx.lineWidth = 15;
-        gctx.strokeStyle = '#222';
-        gctx.stroke();
+    gctx.clearRect(0, 0, w, h);
+    gctx.beginPath();
+    gctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
+    gctx.lineWidth = 10;
+    gctx.strokeStyle = '#333';
+    gctx.stroke();
 
-        // 刻度
-        gctx.save();
-        gctx.translate(cx, cy);
-        for (let i = 0; i <= 40; i++) {
-            const angle = Math.PI + (Math.PI * i / 40);
-            const isCenter = i === 20;
-            const isMajor = i % 5 === 0;
-            const innerR = radius - (isMajor ? 20 : 10);
-            const outerR = radius;
-            
-            gctx.beginPath();
-            gctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
-            gctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
-            gctx.lineWidth = isCenter ? 4 : 2;
-            gctx.strokeStyle = isCenter ? '#4caf50' : (i < 10 || i > 30 ? '#d9534f' : '#555');
-            gctx.stroke();
-        }
-        gctx.restore();
+    // 刻度 (只畫一次 Path 節省效能)
+    gctx.beginPath();
+    for (let i = 0; i <= 40; i++) {
+        const angle = Math.PI + (Math.PI * i / 40);
+        const isCenter = i === 20;
+        const isMajor = i % 5 === 0;
+        const innerR = radius - (isMajor ? 20 : 10);
+        const outerR = radius;
+        gctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+        gctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+    }
+    gctx.lineWidth = 2;
+    gctx.strokeStyle = '#666';
+    gctx.stroke();
 
-        // 指針
-        let safeCents = cents;
-        if (cents === -999 || isNaN(cents)) safeCents = 0;
-        safeCents = Math.max(-50, Math.min(50, safeCents));
+    // 指針
+    let safeCents = cents;
+    if (cents === -999 || isNaN(cents)) safeCents = 0;
+    safeCents = Math.max(-50, Math.min(50, safeCents));
 
-        const angle = Math.PI + (Math.PI * (safeCents + 50) / 100);
-        const ptrX = cx + Math.cos(angle) * (radius - 10);
-        const ptrY = cy + Math.sin(angle) * (radius - 10);
-
-        gctx.beginPath();
-        gctx.moveTo(cx, cy);
-        gctx.lineTo(ptrX, ptrY);
-        gctx.lineWidth = 5;
-        gctx.strokeStyle = (cents === -999) ? '#444' : (Math.abs(safeCents) < 5 ? '#4caf50' : '#ff4d4d');
-        gctx.lineCap = 'round';
-        gctx.stroke();
-    } catch(e) { console.error("Gauge error", e); }
+    const angle = Math.PI + (Math.PI * (safeCents + 50) / 100);
+    gctx.beginPath();
+    gctx.moveTo(cx, cy);
+    gctx.lineTo(cx + Math.cos(angle) * (radius - 5), cy + Math.sin(angle) * (radius - 5));
+    gctx.lineWidth = 4;
+    gctx.strokeStyle = (cents === -999) ? '#444' : (Math.abs(safeCents) < 5 ? '#4caf50' : '#ff4d4d');
+    gctx.stroke();
 }
 
-function drawRollingWave(buffer) {
-    try {
-        const w = waveCanvas.width;
-        const h = waveCanvas.height;
-        
-        // 畫布搬移 (Scroll)
-        wctx.globalCompositeOperation = 'copy';
-        wctx.drawImage(waveCanvas, -2, 0);
-        wctx.globalCompositeOperation = 'source-over';
+// [極速優化] 不使用 drawImage，改用 Rect 重畫，解決手機 Canvas 卡死問題
+function drawFastWave(currentRms) {
+    // 1. 更新歷史陣列
+    rmsHistory.shift();
+    // 視覺增益
+    let visualH = currentRms * 10; 
+    if(visualH > 1) visualH = 1;
+    rmsHistory.push(visualH);
 
-        let sum = 0;
-        for (let v of buffer) sum += v * v;
-        let rms = Math.sqrt(sum / buffer.length) * 20;
-        if (rms > 1) rms = 1;
-        
-        const barHeight = Math.max(2, rms * h);
-        const yStart = (h - barHeight) / 2;
-        
-        wctx.fillStyle = rms > 0.05 ? '#4caf50' : '#222';
-        wctx.fillRect(w - 2, yStart, 2, barHeight);
-    } catch(e) {
-        // 如果 drawImage 失敗，就只清空並重畫，避免死循環
-        console.error("Wave error", e);
+    // 2. 清空重畫
+    const w = waveCanvas.width;
+    const h = waveCanvas.height;
+    wctx.clearRect(0, 0, w, h);
+
+    const barW = w / rmsHistory.length;
+    
+    wctx.fillStyle = '#4caf50';
+    wctx.beginPath(); // 批次繪製
+    for(let i=0; i<rmsHistory.length; i++) {
+        const val = rmsHistory[i];
+        if(val > 0.01) {
+            const barH = val * h;
+            const x = i * barW;
+            const y = (h - barH) / 2;
+            wctx.rect(x, y, barW + 0.5, barH);
+        }
     }
+    wctx.fill();
 }
 
 /* ==============================
-   4. 主迴圈 (含 Try-Catch 保護)
+   4. 主迴圈 (零 GC)
    ============================== */
 function loop() {
     rafId = requestAnimationFrame(loop);
-    
-    // 如果 analyser 消失或 context 被關閉，停止執行
     if (!analyser || !audioCtx) return;
 
-    try {
-        analyser.getFloatTimeDomainData(afArray);
+    // 直接寫入預先配置的陣列，不產生新物件
+    analyser.getFloatTimeDomainData(afArray);
 
-        let sum = 0;
-        for (let i = 0; i < afArray.length; i++) sum += afArray[i] * afArray[i];
-        const rms = Math.sqrt(sum / afArray.length);
-        
-        if(debugEl) debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
+    let sum = 0;
+    for (let i = 0; i < afArray.length; i++) sum += afArray[i] * afArray[i];
+    const rms = Math.sqrt(sum / afArray.length);
+    
+    if(debugEl) debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
 
-        drawRollingWave(afArray);
+    // 繪製波形 (新版)
+    drawFastWave(rms);
 
-        // --- 核心邏輯判斷 ---
-        if (rms > ENERGY_THRESHOLD) {
-            // 有聲音：重置計時器
-            silenceTimer = 0;
-
-            const now = performance.now();
-            if (now - lastPitchTime > 50) {
-                lastPitchTime = now;
-                const bufCopy = new Float32Array(afArray);
-                const freq = autocorrWithCheck(bufCopy, audioCtx.sampleRate);
-
-                if (freq && freq > 60 && freq < 1000) {
-                    const res = closestString(freq);
-                    noteEl.textContent = res.name;
-                    freqEl.textContent = `${freq.toFixed(1)} Hz`;
-                    
-                    const sign = res.cents >= 0 ? '+' : '';
-                    centsEl.textContent = `${sign}${Math.round(res.cents)}¢`;
-                    centsEl.style.color = Math.abs(res.cents) < 10 ? '#4caf50' : '#4fc3f7';
-                    
-                    drawGauge(res.cents);
-                }
-            }
-        } else {
-            // 沒聲音：增加計時器
-            // 安全檢查：如果 silenceTimer 變數不存在(未宣告)，這裡會報錯被 catch 抓到
-            if (typeof silenceTimer === 'undefined') silenceTimer = 0;
+    if (rms > ENERGY_THRESHOLD) {
+        silenceTimer = 0;
+        const now = performance.now();
+        if (now - lastPitchTime > 50) {
+            lastPitchTime = now;
             
-            silenceTimer++;
-            if (silenceTimer > 20) {
-                noteEl.textContent = '--';
-                freqEl.textContent = '0.0 Hz';
-                centsEl.textContent = '等待輸入...';
-                centsEl.style.color = '#888';
-                drawGauge(-999);
+            // 複製數據到 buffer (重複使用 pitchBuffer)
+            pitchBuffer.set(afArray);
+            
+            const freq = autocorrWithCheck(pitchBuffer, audioCtx.sampleRate);
+            if (freq && freq > 60 && freq < 1000) {
+                const res = closestString(freq);
+                noteEl.textContent = res.name;
+                freqEl.textContent = `${freq.toFixed(1)} Hz`;
+                const sign = res.cents >= 0 ? '+' : '';
+                centsEl.textContent = `${sign}${Math.round(res.cents)}¢`;
+                centsEl.style.color = Math.abs(res.cents) < 10 ? '#4caf50' : '#4fc3f7';
+                drawGauge(res.cents);
             }
         }
-    } catch (err) {
-        console.error("Loop Error:", err);
-        statusEl.textContent = "錯誤：" + err.message;
-        // 發生嚴重錯誤時，考慮是否要 cancelAnimationFrame 避免瀏覽器卡死
-        // 但為了觀察，先讓他顯示錯誤訊息
+    } else {
+        silenceTimer++;
+        if (silenceTimer > 10) { // 稍微縮短反應時間
+            noteEl.textContent = '--';
+            freqEl.textContent = '0.0 Hz';
+            centsEl.textContent = '等待輸入...';
+            centsEl.style.color = '#888';
+            drawGauge(-999);
+        }
     }
 }
 
 /* ==============================
-   5. 按鈕事件
+   5. 事件綁定
    ============================== */
 startBtn.addEventListener('click', async () => {
     try {
-        statusEl.textContent = '請求權限...';
+        statusEl.textContent = '啟動中...';
+        // 確保 Context 狀態正確 (手機必備)
+        if(audioCtx && audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false } 
+            audio: { 
+                echoCancellation: false, 
+                autoGainControl: false, 
+                noiseSuppression: false,
+                latency: 0 
+            } 
         });
         
         mediaStream = stream;
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 只初始化一次 Context
+        if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
         source = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 2048;
+        
+        // 初始化 Buffer (只做一次)
         afArray = new Float32Array(analyser.fftSize);
+        pitchBuffer = new Float32Array(analyser.fftSize);
+        
         source.connect(analyser);
         
         startBtn.disabled = true;
@@ -461,27 +442,34 @@ startBtn.addEventListener('click', async () => {
         recBtn.disabled = false;
         statusEl.textContent = "偵測中...";
         
-        silenceTimer = 0; // 重置
+        silenceTimer = 0;
         drawGauge(-999);
-        loop();
+        loop(); // 開始迴圈
         
     } catch (err) {
-        statusEl.textContent = "無法啟動：" + err.message;
+        statusEl.textContent = "錯誤：" + err.message;
+        console.error(err);
     }
 });
 
 stopBtn.addEventListener('click', () => {
     if (rafId) cancelAnimationFrame(rafId);
     if (isRecording) stopRecording();
-    if (audioCtx) audioCtx.close();
+    
+    // 手機上建議不要 close，改用 suspend 或 disconnect，避免下次開啟變慢
+    if (source) { source.disconnect(); source = null; }
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     
-    audioCtx = null;
+    // 重置 UI
     startBtn.disabled = false;
     stopBtn.disabled = true;
     recBtn.disabled = true;
     statusEl.textContent = '已停止';
     drawGauge(-999);
+    
+    // 清空波形
+    rmsHistory.fill(0);
+    drawFastWave(0);
 });
 
 recBtn.addEventListener('click', () => {
