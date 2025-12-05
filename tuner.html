@@ -25,7 +25,7 @@
         align-items: center;
         min-height: 100vh;
         overflow-x: hidden;
-        user-select: none;
+        user-select: none; /* 防止手機操作誤觸 */
         -webkit-tap-highlight-color: transparent;
     }
 
@@ -143,6 +143,13 @@
         position: relative;
     }
     #waveCanvas { width: 100%; height: 120px; display: block; }
+    .vis-label {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        font-size: 10px;
+        color: #555;
+    }
 
     /* --- Footer --- */
     #status { margin-top: 15px; color: var(--text-sub); font-style: italic; white-space: pre-wrap; word-break: break-all;}
@@ -182,6 +189,7 @@
 
     <div class="visualizer-container">
         <canvas id="waveCanvas" width="600" height="240"></canvas>
+        <div class="vis-label">波形紀錄 (Waveform)</div>
     </div>
 
     <div id="status">準備就緒</div>
@@ -200,13 +208,13 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
-// 關鍵變數：預先宣告，重複使用
+// 關鍵變數：預先宣告，重複使用，避免記憶體洩漏
 let silenceTimer = 0; 
 let afArray = null; // 聲音資料陣列
 let pitchBuffer = null; // 複製給音高計算用的陣列
-const rmsHistory = new Array(150).fill(0); // [優化] 改用陣列紀錄波形，不操壞 Canvas
+const rmsHistory = new Array(150).fill(0); // [極速優化] 改用陣列紀錄波形，不用 Canvas 複製
 
-const ENERGY_THRESHOLD = 0.0015;
+const ENERGY_THRESHOLD = 0.0015; // 音量門檻
 const STANDARD_TUNING = {
     "E2": 82.41, "A2": 110.00, "D3": 146.83, 
     "G3": 196.00, "B3": 246.94, "E4": 329.63
@@ -242,7 +250,7 @@ function closestString(freq) {
         const diff = Math.abs(1200 * Math.log2(freq / f));
         if (diff < bestDiff) { bestName = name; bestF = f; bestDiff = diff; }
     }
-    if (bestDiff > 200) { // 擴充範圍
+    if (bestDiff > 200) { // 如果不是標準弦，顯示音名
         const noteNum = 12 * (Math.log2(freq / 440)) + 69;
         const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const rounded = Math.round(noteNum);
@@ -276,7 +284,7 @@ function autocorrWithCheck(buffer, sampleRate) {
 }
 
 /* ==============================
-   3. 輕量化繪圖
+   3. 輕量化繪圖 (手機友善)
    ============================== */
 function drawGauge(cents) {
     const w = gaugeCanvas.width;
@@ -286,6 +294,8 @@ function drawGauge(cents) {
     const radius = h - 40;
 
     gctx.clearRect(0, 0, w, h);
+    
+    // 背景弧線
     gctx.beginPath();
     gctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
     gctx.lineWidth = 10;
@@ -319,14 +329,19 @@ function drawGauge(cents) {
     gctx.lineWidth = 4;
     gctx.strokeStyle = (cents === -999) ? '#444' : (Math.abs(safeCents) < 5 ? '#4caf50' : '#ff4d4d');
     gctx.stroke();
+    
+    // 圓心
+    gctx.beginPath();
+    gctx.arc(cx, cy, 8, 0, 2*Math.PI);
+    gctx.fillStyle = '#444';
+    gctx.fill();
 }
 
 // [極速優化] 不使用 drawImage，改用 Rect 重畫，解決手機 Canvas 卡死問題
 function drawFastWave(currentRms) {
-    // 1. 更新歷史陣列
+    // 1. 更新歷史陣列 (最輕量操作)
     rmsHistory.shift();
-    // 視覺增益
-    let visualH = currentRms * 10; 
+    let visualH = currentRms * 10; // 視覺增益
     if(visualH > 1) visualH = 1;
     rmsHistory.push(visualH);
 
@@ -337,11 +352,12 @@ function drawFastWave(currentRms) {
 
     const barW = w / rmsHistory.length;
     
+    // 3. 批次繪製 (Batch Draw)
     wctx.fillStyle = '#4caf50';
-    wctx.beginPath(); // 批次繪製
+    wctx.beginPath(); 
     for(let i=0; i<rmsHistory.length; i++) {
         const val = rmsHistory[i];
-        if(val > 0.01) {
+        if(val > 0.01) { // 太小的也不畫，省效能
             const barH = val * h;
             const x = i * barW;
             const y = (h - barH) / 2;
@@ -352,7 +368,7 @@ function drawFastWave(currentRms) {
 }
 
 /* ==============================
-   4. 主迴圈 (零 GC)
+   4. 主迴圈 (零 GC，不產生垃圾)
    ============================== */
 function loop() {
     rafId = requestAnimationFrame(loop);
@@ -367,7 +383,7 @@ function loop() {
     
     if(debugEl) debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
 
-    // 繪製波形 (新版)
+    // 繪製波形 (新版輕量化)
     drawFastWave(rms);
 
     if (rms > ENERGY_THRESHOLD) {
@@ -403,12 +419,12 @@ function loop() {
 }
 
 /* ==============================
-   5. 事件綁定
+   5. 事件綁定與初始化
    ============================== */
 startBtn.addEventListener('click', async () => {
     try {
         statusEl.textContent = '啟動中...';
-        // 確保 Context 狀態正確 (手機必備)
+        // 手機上必須先 resume
         if(audioCtx && audioCtx.state === 'suspended') {
             await audioCtx.resume();
         }
@@ -456,7 +472,7 @@ stopBtn.addEventListener('click', () => {
     if (rafId) cancelAnimationFrame(rafId);
     if (isRecording) stopRecording();
     
-    // 手機上建議不要 close，改用 suspend 或 disconnect，避免下次開啟變慢
+    // 手機上改用 disconnect 避免下次開啟變慢
     if (source) { source.disconnect(); source = null; }
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     
@@ -499,6 +515,14 @@ recBtn.addEventListener('click', () => {
         recBtn.classList.remove('recording');
     }
 });
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        recBtn.classList.remove('recording');
+    }
+}
 
 // Init
 drawGauge(-999);
