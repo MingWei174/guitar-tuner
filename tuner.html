@@ -1,411 +1,171 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>測試 吉他調音器 (Web Audio) - Debug 版</title>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tuner - loose</title>
 <style>
-    :root {
-        --bg-color: #1e2126;
-        --card-bg: #2a2e35;
-        --text-main: #ffffff;
-        --text-sub: #8b9bb4;
-        --accent-green: #4caf50;
-        --accent-red: #ff4d4d;
-        --accent-blue: #4fc3f7;
-    }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-           background: var(--bg-color); color: var(--text-main); margin:0; padding:20px; }
-    .controls { display:flex; gap:10px; margin-bottom:12px; }
-    .main-btn { padding:10px 18px; border-radius:8px; border:none; cursor:pointer; }
-    .start { background:var(--accent-green); color:#fff; }
-    .stop { background:var(--accent-red); color:#fff; }
-    .rec-btn { padding:8px 12px; border-radius:8px; background:#333; color:#fff; border:none; cursor:pointer; }
-    #status { color:var(--text-sub); margin-top:10px; }
-    #gaugeCanvas { width:600px; height:300px; background: #2b2f35; display:block; }
-    #waveCanvas { width:600px; height:240px; display:block; background:#0b0b0b; margin-top:12px; }
-    .info-row { display:flex; justify-content:space-between; width:600px; margin-top:8px; color:var(--text-sub); }
-    .note { font-size:72px; margin-top:8px; color:#fff; text-align:center; }
-    .cents { font-size:22px; text-align:center; margin-top:6px; color:var(--accent-blue); }
+body{font-family:Arial;background:#1e2126;color:#fff;padding:18px}
+.controls{display:flex;gap:8px;margin-bottom:12px}
+button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer}
+.start{background:#4caf50;color:#fff} .stop{background:#ff4d4d;color:#fff} .rec{background:#333;color:#fff}
+#gaugeCanvas,#waveCanvas{display:block;background:#222;margin-top:8px}
+.info-row{display:flex;justify-content:space-between;width:600px;color:#9aa8bf}
+.note{font-size:64px;text-align:center;margin-top:8px}
+.cents{font-size:22px;text-align:center;margin-top:6px;color:#4fc3f7}
 </style>
 </head>
 <body>
-
-    <div class="controls">
-        <button id="startBtn" class="main-btn start">▶ 開始調音</button>
-        <button id="stopBtn" class="main-btn stop" disabled>■ 停止</button>
-        <button id="recBtn" class="rec-btn" disabled>REC</button>
-    </div>
-
-    <div class="info-row">
-        <div>A4 = 440Hz</div>
-        <div id="debugInfo">RMS: 0.0000</div>
-    </div>
-
-    <canvas id="gaugeCanvas" width="600" height="300"></canvas>
-
-    <div class="cents" id="cents">0¢</div>
-    <div class="note" id="note">--</div>
-
-    <canvas id="waveCanvas" width="600" height="240"></canvas>
-
-    <div id="status">請按「開始調音」</div>
+<div class="controls">
+  <button id="startBtn" class="start">▶ 開始調音</button>
+  <button id="stopBtn" class="stop" disabled>■ 停止</button>
+  <button id="recBtn" class="rec" disabled>REC</button>
+</div>
+<div class="info-row"><div>A4=440Hz</div><div id="debugInfo">RMS: 0.0000</div></div>
+<canvas id="gaugeCanvas" width="600" height="300"></canvas>
+<div class="cents" id="cents">0¢</div>
+<div class="note" id="note">--</div>
+<canvas id="waveCanvas" width="600" height="240"></canvas>
+<div id="status" style="color:#9aa8bf;margin-top:8px">請按開始</div>
 
 <script>
-/* ==============================
-   測試版：整合 resume、offscreen、統一 RMS 判斷、較多 debug
-   ============================== */
-
-let audioCtx = null;
-let source = null;
-let analyser = null;
-let mediaStream = null;
-let rafId = null;
-
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
-
-const ENERGY_THRESHOLD = 0.002; // 可視環境調整
-const RESIZE_ANALYSER_SIZE = 2048;
-
-const STANDARD_TUNING = {
-    "E2": 82.41, "A2": 110.00, "D3": 146.83,
-    "G3": 196.00, "B3": 246.94, "E4": 329.63
+/* loose 參數 */
+const PARAMS = {
+  MIN_FREQ: 40,
+  MAX_FREQ: 2000,
+  ENERGY_THRESHOLD: 0.0005,
+  PITCH_INTERVAL_MS: 60
 };
+/* 其餘與測試版相同的實作（縮減說明） */
+let audioCtx=null, source=null, analyser=null, mediaStream=null, rafId=null;
+let mediaRecorder=null, audioChunks=[], isRecording=false;
+const RESIZE_ANALYSER_SIZE = 2048;
+const STANDARD_TUNING = {"E2":82.41,"A2":110.00,"D3":146.83,"G3":196.00,"B3":246.94,"E4":329.63};
+let afArray=null, lastPitchTime=0;
 
-let afArray = null;
-let lastPitchTime = 0;
+const startBtn=document.getElementById('startBtn');
+const stopBtn=document.getElementById('stopBtn');
+const recBtn=document.getElementById('recBtn');
+const statusEl=document.getElementById('status');
+const noteEl=document.getElementById('note');
+const centsEl=document.getElementById('cents');
+const debugEl=document.getElementById('debugInfo');
 
-// DOM
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const recBtn = document.getElementById('recBtn');
-const statusEl = document.getElementById('status');
-const noteEl = document.getElementById('note');
-const centsEl = document.getElementById('cents');
-const debugEl = document.getElementById('debugInfo');
+const gaugeCanvas=document.getElementById('gaugeCanvas'); const gctx=gaugeCanvas.getContext('2d');
+const waveCanvas=document.getElementById('waveCanvas'); const wctx=waveCanvas.getContext('2d');
 
-const gaugeCanvas = document.getElementById('gaugeCanvas');
-const gctx = gaugeCanvas.getContext('2d');
+const offscreen=document.createElement('canvas'); offscreen.width=waveCanvas.width; offscreen.height=waveCanvas.height;
+const offCtx=offscreen.getContext('2d');
 
-const waveCanvas = document.getElementById('waveCanvas');
-const wctx = waveCanvas.getContext('2d');
-
-/* offscreen canvas for safe scrolling */
-const offscreen = document.createElement('canvas');
-offscreen.width = waveCanvas.width;
-offscreen.height = waveCanvas.height;
-const offCtx = offscreen.getContext('2d');
-
-/* ==============================
-   Autocorrelation + note mapping
-   ============================== */
 function closestString(freq){
-    let bestName = null, bestF = null, bestDiff = Infinity;
-    for(const name in STANDARD_TUNING){
-        const f = STANDARD_TUNING[name];
-        const diff = Math.abs(1200 * Math.log2(freq / f));
-        if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
-    }
-    if(bestDiff > 200) {
-        const noteNum = 12 * (Math.log2(freq / 440)) + 69;
-        const noteNames = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-        const rounded = Math.round(noteNum);
-        const name = noteNames[(rounded % 12 + 12) % 12];
-        bestName = name;
-        bestF = 440 * Math.pow(2, (rounded - 69) / 12);
-    }
-    const cents = 1200 * Math.log2(freq / bestF);
-    return {name: bestName, targetF: bestF, cents: cents};
+  let bestName=null,bestF=null,bestDiff=Infinity;
+  for(const n in STANDARD_TUNING){const f=STANDARD_TUNING[n];const diff=Math.abs(1200*Math.log2(freq/f)); if(diff<bestDiff){bestName=n;bestF=f;bestDiff=diff;}}
+  if(bestDiff>200){const noteNum=12*(Math.log2(freq/440))+69;const noteNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];const rounded=Math.round(noteNum);bestName=noteNames[(rounded%12+12)%12];bestF=440*Math.pow(2,(rounded-69)/12);}
+  const cents=1200*Math.log2(freq/bestF); return {name:bestName,targetF:bestF,cents:cents};
 }
 
-function autocorrWithCheck(buffer, sampleRate){
-    const size = buffer.length;
-    let mean = 0;
-    for(let i=0;i<size;i++) mean += buffer[i];
-    mean /= size;
-    for(let i=0;i<size;i++) buffer[i] -= mean;
-
-    let sumSq = 0;
-    for(let i=0;i<size;i++) sumSq += buffer[i]*buffer[i];
-    let rms = Math.sqrt(sumSq/size);
-    // debug
-    // console.log('autocorr RMS', rms.toFixed(6));
-    if (rms < ENERGY_THRESHOLD) return null;
-
-    let bestOffset = -1;
-    let bestCorr = 0;
-
-    const MAX_FREQ = 1000;
-    const MIN_FREQ = 70;
-    const minLag = Math.floor(sampleRate / MAX_FREQ);
-    const maxLag = Math.floor(sampleRate / MIN_FREQ);
-
-    for(let lag = minLag; lag <= maxLag; lag++){
-        let corr = 0;
-        for(let i=0; i < size - lag; i++) corr += buffer[i] * buffer[i + lag];
-        if(corr > bestCorr){ bestCorr = corr; bestOffset = lag; }
-    }
-    if(bestOffset <= 0) return null;
-
-    // Parabolic interpolation nearby
-    let offset = bestOffset;
-    let s0=0, s2=0;
-    if (bestOffset-1 > 0) {
-        for(let i=0;i < size - (bestOffset-1); i++) s0 += buffer[i] * buffer[i + bestOffset -1];
-    }
-    if (bestOffset+1 < size) {
-        for(let i=0;i < size - (bestOffset+1); i++) s2 += buffer[i] * buffer[i + bestOffset +1];
-    }
-    const denom = (s0 - 2*bestCorr + s2);
-    if (denom !== 0) offset = bestOffset + 0.5 * (s0 - s2) / denom;
-
-    return sampleRate / offset;
+function autocorrWithCheck(buffer,sampleRate){
+  const size=buffer.length;
+  let mean=0; for(let i=0;i<size;i++) mean+=buffer[i]; mean/=size; for(let i=0;i<size;i++) buffer[i]-=mean;
+  let sumSq=0; for(let i=0;i<size;i++) sumSq+=buffer[i]*buffer[i]; let rms=Math.sqrt(sumSq/size);
+  if(rms < PARAMS.ENERGY_THRESHOLD) return null;
+  let bestOffset=-1,bestCorr=0;
+  const minLag=Math.floor(sampleRate/PARAMS.MAX_FREQ);
+  const maxLag=Math.floor(sampleRate/PARAMS.MIN_FREQ);
+  for(let lag=minLag;lag<=maxLag;lag++){let corr=0; for(let i=0;i<size-lag;i++) corr+=buffer[i]*buffer[i+lag]; if(corr>bestCorr){bestCorr=corr;bestOffset=lag;}}
+  if(bestOffset<=0) return null;
+  let s0=0,s2=0;
+  if(bestOffset-1>0) for(let i=0;i<size-(bestOffset-1);i++) s0+=buffer[i]*buffer[i+bestOffset-1];
+  if(bestOffset+1<size) for(let i=0;i<size-(bestOffset+1);i++) s2+=buffer[i]*buffer[i+bestOffset+1];
+  const denom=(s0 - 2*bestCorr + s2);
+  let offset=bestOffset;
+  if(denom!==0) offset = bestOffset + 0.5*(s0 - s2)/denom;
+  return sampleRate/offset;
 }
 
-/* ==============================
-   Visuals：Gauge & Rolling Wave
-   ============================== */
-function drawGauge(cents) {
-    const w = gaugeCanvas.width;
-    const h = gaugeCanvas.height;
-    const cx = w/2;
-    const cy = h - 20;
-    const radius = h - 40;
-    gctx.clearRect(0,0,w,h);
-
-    // 半圓外圈
-    gctx.beginPath();
-    gctx.arc(cx, cy, radius, Math.PI, 2*Math.PI);
-    gctx.lineWidth = 15;
-    gctx.strokeStyle = '#222';
-    gctx.stroke();
-
-    // 刻度
-    gctx.save();
-    gctx.translate(cx, cy);
-    const totalTicks = 40;
-    for(let i=0;i<=totalTicks;i++){
-        const angle = Math.PI + (Math.PI * i / totalTicks);
-        const cos = Math.cos(angle), sin = Math.sin(angle);
-        const isCenter = i === totalTicks/2;
-        const isMajor = i % 5 === 0;
-        const innerR = radius - (isMajor ? 20 : 10);
-        const outerR = radius;
-        gctx.beginPath();
-        gctx.moveTo(cos * innerR, sin * innerR);
-        gctx.lineTo(cos * outerR, sin * outerR);
-        if(isCenter) gctx.strokeStyle = '#4caf50';
-        else if(i < 10 || i > 30) gctx.strokeStyle = '#d9534f';
-        else gctx.strokeStyle = '#555';
-        gctx.lineWidth = isCenter ? 4 : 2;
-        gctx.stroke();
-    }
-    gctx.restore();
-
-    // 指針
-    let safeCents = Math.max(-50, Math.min(50, cents));
-    let angle = Math.PI + (Math.PI * (safeCents + 50) / 100);
-    if (cents === -999) angle = Math.PI * 1.5;
-    const ptrLen = radius - 10;
-    const ptrX = cx + Math.cos(angle) * ptrLen;
-    const ptrY = cy + Math.sin(angle) * ptrLen;
-    gctx.beginPath();
-    gctx.moveTo(cx, cy);
-    gctx.lineTo(ptrX, ptrY);
-    gctx.lineWidth = 5;
-    gctx.strokeStyle = Math.abs(safeCents) < 5 ? '#4caf50' : '#ff4d4d';
-    gctx.lineCap = 'round';
-    gctx.stroke();
-    gctx.beginPath();
-    gctx.arc(cx, cy, 10, 0, 2*Math.PI);
-    gctx.fillStyle = '#444';
-    gctx.fill();
+/* draw functions (same as earlier) */
+function drawGauge(cents){
+  const w=gaugeCanvas.width,h=gaugeCanvas.height,cx=w/2,cy=h-20,radius=h-40;
+  gctx.clearRect(0,0,w,h);
+  gctx.beginPath(); gctx.arc(cx,cy,radius,Math.PI,2*Math.PI); gctx.lineWidth=15; gctx.strokeStyle='#222'; gctx.stroke();
+  gctx.save(); gctx.translate(cx,cy);
+  const totalTicks=40;
+  for(let i=0;i<=totalTicks;i++){ const angle=Math.PI+(Math.PI*i/totalTicks); const cos=Math.cos(angle), sin=Math.sin(angle); const isCenter=i===totalTicks/2; const isMajor=i%5===0; const innerR=radius-(isMajor?20:10); const outerR=radius;
+    gctx.beginPath(); gctx.moveTo(cos*innerR,sin*innerR); gctx.lineTo(cos*outerR,sin*outerR);
+    if(isCenter) gctx.strokeStyle='#4caf50'; else if(i<10||i>30) gctx.strokeStyle='#d9534f'; else gctx.strokeStyle='#555';
+    gctx.lineWidth=isCenter?4:2; gctx.stroke();
+  }
+  gctx.restore();
+  let safeCents=Math.max(-50,Math.min(50,cents)); let angle=Math.PI+(Math.PI*(safeCents+50)/100);
+  if(cents===-999) angle=Math.PI*1.5; const ptrLen=radius-10; const ptrX=cx+Math.cos(angle)*ptrLen; const ptrY=cy+Math.sin(angle)*ptrLen;
+  gctx.beginPath(); gctx.moveTo(cx,cy); gctx.lineTo(ptrX,ptrY); gctx.lineWidth=5; gctx.strokeStyle=Math.abs(safeCents)<5?'#4caf50':'#ff4d4d'; gctx.lineCap='round'; gctx.stroke();
+  gctx.beginPath(); gctx.arc(cx,cy,10,0,2*Math.PI); gctx.fillStyle='#444'; gctx.fill();
 }
 
-function drawRollingWave(buffer) {
-    const w = waveCanvas.width;
-    const h = waveCanvas.height;
-    const speed = 2;
-
-    // copy to offscreen
-    offCtx.clearRect(0,0,w,h);
-    offCtx.drawImage(waveCanvas, 0, 0);
-
-    // clear main and draw left-shifted
-    wctx.clearRect(0,0,w,h);
-    wctx.drawImage(offscreen, -speed, 0);
-
-    let sum = 0;
-    for(let v of buffer) sum += v*v;
-    let rms = Math.sqrt(sum/buffer.length) * 10;
-    if (rms > 1) rms = 1;
-
-    const barHeight = rms * h;
-    const yStart = (h - barHeight) / 2;
-
-    wctx.fillStyle = rms > 0.05 ? '#4caf50' : '#111';
-    wctx.fillRect(w - speed, yStart, speed, barHeight);
+function drawRollingWave(buffer){
+  const w=waveCanvas.width,h=waveCanvas.height,speed=2;
+  offCtx.clearRect(0,0,w,h); offCtx.drawImage(waveCanvas,0,0);
+  wctx.clearRect(0,0,w,h); wctx.drawImage(offscreen,-speed,0);
+  let sum=0; for(let v of buffer) sum+=v*v; let rms=Math.sqrt(sum/buffer.length)*10; if(rms>1) rms=1;
+  const barHeight=rms*h, yStart=(h-barHeight)/2;
+  wctx.fillStyle = rms>0.05? '#4caf50' : '#111'; wctx.fillRect(w-speed,yStart,speed,barHeight);
 }
 
-/* init visuals */
-drawGauge(-999);
-wctx.fillStyle = '#0b0b0b';
-wctx.fillRect(0,0,waveCanvas.width,waveCanvas.height);
+drawGauge(-999); wctx.fillStyle='#0b0b0b'; wctx.fillRect(0,0,waveCanvas.width,waveCanvas.height);
 
-/* ==============================
-   MediaRecorder
-   ============================== */
-function startRecording(stream) {
-    audioChunks = [];
-    try {
-        mediaRecorder = new MediaRecorder(stream);
-    } catch(e) {
-        console.warn('MediaRecorder unavailable', e);
-        statusEl.textContent = '瀏覽器不支援 MediaRecorder';
-        return;
-    }
-    mediaRecorder.ondataavailable = ev => {
-        if (ev.data && ev.data.size > 0) audioChunks.push(ev.data);
-    };
-    mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const url = URL.createObjectURL(audioBlob);
-        // 建立簡單播放 UI
-        const a = document.createElement('audio');
-        a.controls = true; a.src = url;
-        document.body.appendChild(a);
-        statusEl.textContent = '錄音完成';
-    };
-    mediaRecorder.start();
-    isRecording = true;
-    recBtn.textContent = 'REC ●';
-    statusEl.textContent = '錄音中...';
-}
+/* media recorder */
+function startRecording(stream){ audioChunks=[]; try{ mediaRecorder=new MediaRecorder(stream);}catch(e){console.warn('no MR',e); statusEl.textContent='無法錄音'; return;} mediaRecorder.ondataavailable=ev=>{ if(ev.data && ev.data.size>0) audioChunks.push(ev.data); }; mediaRecorder.onstop=()=>{ const b=new Blob(audioChunks,{type:'audio/webm'}); const u=URL.createObjectURL(b); const a=document.createElement('audio'); a.controls=true; a.src=u; document.body.appendChild(a); statusEl.textContent='錄音完成';}; mediaRecorder.start(); isRecording=true; recBtn.textContent='REC ●'; statusEl.textContent='錄音中...';}
+function stopRecording(){ if(mediaRecorder && isRecording){ mediaRecorder.stop(); isRecording=false; recBtn.textContent='REC'; } }
 
-function stopRecording(){
-    if(mediaRecorder && isRecording){
-        mediaRecorder.stop();
-        isRecording = false;
-        recBtn.textContent = 'REC';
-    }
-}
+/* controls */
+recBtn.addEventListener('click',()=>{ if(!mediaStream)return; if(!isRecording) startRecording(mediaStream); else stopRecording(); });
 
-/* ==============================
-   Control: start / stop / loop
-   ============================== */
-recBtn.addEventListener('click', () => {
-    if (!mediaStream) return;
-    if (!isRecording) startRecording(mediaStream);
-    else stopRecording();
+startBtn.addEventListener('click', async ()=>{
+  startBtn.disabled=true; statusEl.textContent='啟動中...'; console.log('start clicked');
+  try{
+    mediaStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,autoGainControl:false,noiseSuppression:false}});
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = RESIZE_ANALYSER_SIZE; afArray = new Float32Array(analyser.fftSize);
+    source.connect(analyser);
+    stopBtn.disabled=false; recBtn.disabled=false; statusEl.textContent='偵測中...'; drawGauge(-999); lastPitchTime=0;
+    mediaStream.getTracks().forEach(t=>console.log('track',t.kind,'state',t.readyState,'enabled',t.enabled));
+    loop();
+  }catch(err){ console.error(err); statusEl.textContent='取得麥克風失敗'; startBtn.disabled=false; }
 });
 
-startBtn.addEventListener('click', async () => {
-    startBtn.disabled = true;
-    statusEl.textContent = '啟動中...';
-    console.log('start clicked');
-    try {
-        const constraints = { audio: { echoCancellation:false, autoGainControl:false, noiseSuppression:false } };
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-        console.log('got stream', mediaStream);
-
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        source = audioCtx.createMediaStreamSource(mediaStream);
-
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = RESIZE_ANALYSER_SIZE;
-        afArray = new Float32Array(analyser.fftSize);
-
-        source.connect(analyser);
-
-        stopBtn.disabled = false;
-        recBtn.disabled = false;
-        statusEl.textContent = '偵測中...';
-        drawGauge(-999);
-        lastPitchTime = 0;
-
-        // log track states
-        mediaStream.getTracks().forEach(t => console.log('track', t.kind, 'state', t.readyState, 'enabled', t.enabled));
-
-        loop();
-    } catch(err) {
-        console.error(err);
-        statusEl.textContent = '錯誤：無法取得麥克風權限';
-        startBtn.disabled = false;
-    }
+stopBtn.addEventListener('click',()=>{
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+  if(isRecording) stopRecording();
+  if(audioCtx) { audioCtx.close().catch(()=>{}); audioCtx=null; }
+  if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop());
+  mediaStream=null; analyser=null; source=null;
+  startBtn.disabled=false; stopBtn.disabled=true; recBtn.disabled=true; statusEl.textContent='已停止'; noteEl.textContent='--'; centsEl.textContent='0¢'; drawGauge(-999);
 });
 
-stopBtn.addEventListener('click', () => {
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-    if (isRecording) stopRecording();
-    if (audioCtx) { audioCtx.close().catch(()=>{}); audioCtx = null; }
-    if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-    mediaStream = null;
-    analyser = null;
-    source = null;
-
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    recBtn.disabled = true;
-    statusEl.textContent = '已停止';
-    noteEl.textContent = '--';
-    centsEl.textContent = '0¢';
-    drawGauge(-999);
-});
-
-/* 主迴圈 */
 function loop(){
-    rafId = requestAnimationFrame(loop);
-    if (!analyser) return;
-
-    // 若 audioCtx 被 suspend，自動 resume
-    if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume().then(()=> {
-            console.log('AudioContext resumed');
-        }).catch((e)=> {
-            console.warn('resume failed', e);
-        });
-    }
-
-    analyser.getFloatTimeDomainData(afArray);
-
-    // 計 RMS
-    let sum = 0;
-    for(let i=0;i<afArray.length;i++) sum += afArray[i]*afArray[i];
-    const rms = Math.sqrt(sum / afArray.length);
-    debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
-    // console.debug('RMS', rms);
-
-    // 繪畫滾動波形
-    drawRollingWave(afArray);
-
-    const now = performance.now();
-    if (rms > ENERGY_THRESHOLD && (now - lastPitchTime > 80)) {
-        lastPitchTime = now;
-        const bufCopy = new Float32Array(afArray);
-        const freq = autocorrWithCheck(bufCopy, audioCtx.sampleRate);
-        console.log('detected freq', freq);
-        if (freq && freq > 60 && freq < 1000) {
-            const res = closestString(freq);
-            noteEl.textContent = res.name;
-            centsEl.textContent = (res.cents >=0? '+':'') + Math.round(res.cents) + '¢';
-            if (Math.abs(res.cents) < 10) centsEl.style.color = '#4caf50';
-            else centsEl.style.color = '#4fc3f7';
-            drawGauge(res.cents);
-        } else {
-            // 沒偵測到音高時，可以選擇把顯示重置或保留上次結果
-            // 這裡我們不重置 note，僅畫中心針
-            drawGauge(-999);
-        }
+  rafId = requestAnimationFrame(loop);
+  if(!analyser) return;
+  if(audioCtx && audioCtx.state === 'suspended') { audioCtx.resume().catch(e=>console.warn('resume',e)); }
+  analyser.getFloatTimeDomainData(afArray);
+  let sum=0; for(let i=0;i<afArray.length;i++) sum += afArray[i]*afArray[i]; const rms = Math.sqrt(sum/afArray.length);
+  debugEl.textContent = `RMS: ${rms.toFixed(4)}`;
+  drawRollingWave(afArray);
+  const now = performance.now();
+  if(rms > PARAMS.ENERGY_THRESHOLD && (now - lastPitchTime > PARAMS.PITCH_INTERVAL_MS)) {
+    lastPitchTime = now;
+    const bufCopy = new Float32Array(afArray);
+    const freq = autocorrWithCheck(bufCopy, audioCtx.sampleRate);
+    console.log('RMS', rms.toFixed(6), 'audioCtx', audioCtx?audioCtx.state:'null', 'freq', freq);
+    if(freq && freq > 30 && freq < 4000) {
+      const res = closestString(freq);
+      noteEl.textContent = res.name;
+      centsEl.textContent = (res.cents>=0?'+':'') + Math.round(res.cents) + '¢';
+      drawGauge(res.cents);
     } else {
-        // 若 RMS 過低，顯示中間位置
-        if (rms <= ENERGY_THRESHOLD) {
-            drawGauge(-999);
-        }
+      drawGauge(-999);
     }
+  } else {
+    if(rms <= PARAMS.ENERGY_THRESHOLD) drawGauge(-999);
+  }
 }
-
 </script>
 </body>
 </html>
