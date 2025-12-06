@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>吉他調音器 (專業介面版)</title>
+<title>吉他新手工作站 (調音+教學)</title>
 <style>
     :root {
-        --bg-color: #212529; /* 深色背景 */
-        --card-bg: #2b3035;   /* 卡片背景 */
+        --bg-color: #1e2126;
+        --panel-bg: #2b3035;
         --text-main: #ffffff;
         --text-sub: #adb5bd;
-        --accent-green: #2ecc71; /* 亮綠色 */
-        --accent-red: #e74c3c;   /* 亮紅色 */
-        --accent-blue: #3498db;  /* 亮藍色 */
+        --accent-green: #2ecc71;
+        --accent-red: #e74c3c;
+        --accent-blue: #3498db;
     }
 
     body {
@@ -20,28 +20,57 @@
         background-color: var(--bg-color);
         color: var(--text-main);
         margin: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
         min-height: 100vh;
         overflow-x: hidden;
-        user-select: none;
-        -webkit-tap-highlight-color: transparent;
+        /* 改為 Flex 佈局以支援左右分欄，但在手機上會自動變垂直 */
+        display: flex;
+        flex-direction: column;
     }
 
     /* --- Header --- */
     header {
         width: 100%;
-        max-width: 500px;
-        padding: 15px;
+        padding: 15px 20px;
+        background-color: #15181c;
         display: flex;
         justify-content: space-between;
         align-items: center;
         box-sizing: border-box;
+        border-bottom: 1px solid #333;
+        z-index: 100;
     }
 
     h1 { font-size: 20px; margin: 0; font-weight: 600; letter-spacing: 1px; }
 
+    /* 選單按鈕 */
+    .menu-btn { font-size: 24px; color: #adb5bd; cursor: pointer; user-select: none; }
+    
+    /* 下拉選單樣式 */
+    .dropdown-menu {
+        position: absolute;
+        top: 60px;
+        left: 0;
+        width: 250px;
+        background-color: #2b3035;
+        border: 1px solid #444;
+        border-radius: 0 0 10px 0;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+        display: none; /* 預設隱藏 */
+        flex-direction: column;
+        z-index: 200;
+    }
+    .dropdown-menu.show { display: flex; }
+    .dropdown-menu a {
+        color: white;
+        padding: 15px 20px;
+        text-decoration: none;
+        border-bottom: 1px solid #3a3f45;
+        transition: background 0.2s;
+    }
+    .dropdown-menu a:hover { background-color: #3a3f45; color: var(--accent-green); }
+    .dropdown-menu a:last-child { border-bottom: none; }
+
+    /* 錄音按鈕 */
     .rec-btn {
         background: #343a40;
         border: 1px solid #495057;
@@ -54,25 +83,48 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        transition: all 0.2s;
     }
-    .rec-dot {
-        width: 8px;
-        height: 8px;
-        background-color: var(--accent-red);
-        border-radius: 50%;
-    }
-    .rec-btn.recording {
-        background-color: rgba(231, 76, 60, 0.2);
-        border-color: var(--accent-red);
-        color: var(--accent-red);
-    }
+    .rec-dot { width: 8px; height: 8px; background-color: var(--accent-red); border-radius: 50%; }
+    .rec-btn.recording { background-color: rgba(231, 76, 60, 0.2); border-color: var(--accent-red); color: var(--accent-red); }
     .rec-btn.recording .rec-dot { animation: blink 1s infinite; }
 
-    /* --- Controls --- */
-    .controls { display: flex; gap: 15px; margin-bottom: 15px; }
+    /* --- Main Container (左右佈局核心) --- */
+    .main-container {
+        display: flex;
+        flex-wrap: wrap; /* 讓手機版可以換行 */
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        gap: 20px;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+
+    /* 左側：調音器 */
+    .left-panel {
+        flex: 1;
+        min-width: 350px; /* 手機版最小寬度 */
+        max-width: 500px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* 右側：影片與教學 */
+    .right-panel {
+        flex: 1;
+        min-width: 350px;
+        max-width: 600px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    /* --- Tuner Styles (左側) --- */
+    .controls { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; justify-content: center;}
     .main-btn {
-        background: var(--accent-green); /* 綠色開始鈕 */
+        background: var(--accent-green);
         color: #fff;
         border: none;
         padding: 12px 32px;
@@ -81,21 +133,13 @@
         font-weight: bold;
         cursor: pointer;
         box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
-        transition: transform 0.1s;
     }
-    .main-btn:active { transform: scale(0.96); }
     .main-btn:disabled { background: #495057; color: #868e96; box-shadow: none; cursor: not-allowed; }
-    
-    .stop-btn { 
-        background: var(--accent-red); 
-        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
-    }
+    .stop-btn { background: var(--accent-red); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
 
-    /* --- Main Display --- */
     .tuner-body {
-        background-color: var(--card-bg);
-        width: 92%;
-        max-width: 420px;
+        background-color: var(--panel-bg);
+        width: 100%;
         border-radius: 24px;
         padding: 25px 20px;
         text-align: center;
@@ -104,119 +148,185 @@
         flex-direction: column;
         align-items: center;
         border: 1px solid #3a3f45;
-    }
-
-    .info-row {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-        color: var(--text-sub);
-        font-size: 12px;
-        margin-bottom: 5px;
-        padding: 0 10px;
         box-sizing: border-box;
     }
 
-    /* 畫布 */
-    #gaugeCanvas {
-        width: 100%;
-        height: auto;
-        /* 保持寬高比，讓它不會被拉伸 */
-        display: block;
-        margin-top: 10px;
-        margin-bottom: 0px;
-    }
+    .info-row { display: flex; justify-content: space-between; width: 100%; color: var(--text-sub); font-size: 12px; margin-bottom: 5px; }
+    #gaugeCanvas { width: 100%; height: auto; display: block; margin-top: 10px; }
+    .note-display { font-size: 90px; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+    .cents-badge { background: #212529; padding: 4px 12px; border-radius: 8px; border: 1px solid #495057; font-size: 16px; font-weight: 600; color: var(--accent-blue); display: inline-block; margin-bottom: 5px; }
+    .freq-detail { font-size: 14px; color: var(--text-sub); margin-top: 5px; font-family: monospace; }
 
-    .note-display {
-        font-size: 90px;
-        font-weight: 800;
-        margin: 0;
-        line-height: 1;
-        color: var(--text-main);
-        text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    }
-    
-    .cents-badge {
-        background: #212529;
-        padding: 4px 12px;
-        border-radius: 8px;
-        border: 1px solid #495057;
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--accent-blue);
-        min-width: 70px;
-        display: inline-block;
-        margin-bottom: 5px;
-    }
-
-    .freq-detail { 
-        font-size: 14px; 
-        color: var(--text-sub); 
-        margin-top: 5px; 
-        font-family: monospace; 
-    }
-
-    /* --- Waveform --- */
     .visualizer-container {
-        width: 92%;
-        max-width: 420px;
+        width: 100%;
         height: 100px;
         margin-top: 15px;
         background: #1a1d20;
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid #3a3f45;
-        position: relative;
     }
     #waveCanvas { width: 100%; height: 100%; display: block; }
-    
-    /* --- Footer --- */
-    #status { margin-top: 20px; color: var(--text-sub); font-size: 13px; font-style: italic;}
-    #audioLinkContainer { margin-top: 15px; width: 90%; text-align: center; }
+    #status { margin-top: 10px; color: var(--text-sub); font-size: 13px; font-style: italic;}
+    #audioLinkContainer { margin-top: 10px; width: 100%; text-align: center; }
     a.download-link { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dashed; font-size: 14px; display: block; margin-top: 5px;}
     audio { width: 100%; margin-top: 5px; height: 36px; }
+
+    /* --- Right Panel Styles (右側：影片與和弦) --- */
+    .video-wrapper {
+        width: 100%;
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        aspect-ratio: 16 / 9; /* 維持影片比例 */
+        border: 1px solid #444;
+    }
+    .video-wrapper iframe { width: 100%; height: 100%; border: none; }
+
+    .chord-section {
+        background: var(--panel-bg);
+        border-radius: 12px;
+        padding: 15px;
+        border: 1px solid #3a3f45;
+    }
+    .chord-title { font-size: 16px; margin-bottom: 10px; color: var(--accent-green); font-weight: bold; }
     
+    .chord-grid {
+        display: flex;
+        gap: 10px;
+        justify-content: space-around;
+        flex-wrap: wrap;
+    }
+    /* 模擬和弦圖的方塊 (Placeholder) */
+    .chord-box {
+        width: 70px;
+        height: 90px;
+        background: #fff;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333;
+        font-weight: bold;
+        position: relative;
+    }
+    /* 這裡你可以放真正的 img 標籤 */
+    .chord-box span { font-size: 24px; }
+    .chord-label {
+        position: absolute;
+        bottom: -20px;
+        width: 100%;
+        text-align: center;
+        color: #fff;
+        font-size: 12px;
+    }
+
     @keyframes blink { 50% { opacity: 0; } }
+
+    /* 手機版適應 (小於 800px 時強制垂直排列) */
+    @media (max-width: 800px) {
+        .main-container { flex-direction: column; align-items: center; }
+        .left-panel, .right-panel { width: 100%; max-width: 100%; }
+    }
 </style>
 </head>
 <body>
 
     <header>
-        <div style="font-size: 20px; color: #6c757d;">☰</div>
-        <h1>吉他調音器</h1>
+        <div class="menu-btn" onclick="toggleMenu()">☰</div>
+        
+        <div class="dropdown-menu" id="dropdownMenu">
+            <a href="https://www.91pu.com.tw/" target="_blank">🎸 91 譜 (吉他譜網站)</a>
+            <a href="https://www.91pu.com.tw/msearch/?search=%E6%99%B4%E5%A4%A9" target="_blank">🎵 周杰倫 - 晴天 (吉他譜)</a>
+            <a href="https://www.google.com/search?q=metronome" target="_blank">⏱️ 線上節拍器</a>
+            <a href="#" onclick="alert('功能開發中！')">❓ 如何調音教學</a>
+        </div>
+
+        <h1>吉他新手工作站</h1>
+        
         <button id="recBtn" class="rec-btn" disabled>
             <span class="rec-dot"></span> REC
         </button>
     </header>
 
-    <div class="controls">
-        <button id="startBtn" class="main-btn">▶ 開始</button>
-        <button id="stopBtn" class="main-btn stop-btn" disabled>■ 停止</button>
-    </div>
+    <div class="main-container">
+        
+        <div class="left-panel">
+            <div class="controls">
+                <button id="startBtn" class="main-btn">▶ 開始調音</button>
+                <button id="stopBtn" class="main-btn stop-btn" disabled>■ 停止</button>
+            </div>
 
-    <div class="tuner-body">
-        <div class="info-row">
-            <span>A4 = 440Hz</span>
-            <span id="debugInfo">RMS: 0.0000</span>
+            <div class="tuner-body">
+                <div class="info-row">
+                    <span>A4 = 440Hz</span>
+                    <span id="debugInfo">RMS: 0.0000</span>
+                </div>
+
+                <canvas id="gaugeCanvas" width="600" height="340"></canvas>
+
+                <div class="cents-badge" id="cents">0¢</div>
+                <div class="note-display" id="note">--</div>
+                <div class="freq-detail" id="freq">0.0 Hz</div>
+            </div>
+
+            <div class="visualizer-container">
+                <canvas id="waveCanvas" width="600" height="150"></canvas>
+            </div>
+
+            <div id="status">準備就緒，請按下開始 (建議戴耳機使用)</div>
+            <div id="audioLinkContainer"></div>
         </div>
 
-        <canvas id="gaugeCanvas" width="600" height="340"></canvas>
+        <div class="right-panel">
+            <div class="video-wrapper">
+                <iframe 
+                    src="https://www.youtube.com/embed/DYptgVvkVLQ?si=Placeholder" 
+                    title="YouTube video player" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    allowfullscreen>
+                </iframe>
+            </div>
 
-        <div class="cents-badge" id="cents">0¢</div>
-        <div class="note-display" id="note">--</div>
-        <div class="freq-detail" id="freq">0.0 Hz</div>
+            <div class="chord-section">
+                <div class="chord-title">🔥 晴天 - 常用和弦表 (範例)</div>
+                <div class="chord-grid">
+                    <div class="chord-box">Em<div class="chord-label">Em</div></div>
+                    <div class="chord-box">C<div class="chord-label">Cmaj7</div></div>
+                    <div class="chord-box">G<div class="chord-label">G</div></div>
+                    <div class="chord-box">D<div class="chord-label">D/F#</div></div>
+                </div>
+                <div style="margin-top: 10px; color: #888; font-size: 12px;">
+                    * 這是給 "晴天" 這首歌練習用的參考和弦
+                </div>
+            </div>
+        </div>
+
     </div>
-
-    <div class="visualizer-container">
-        <canvas id="waveCanvas" width="600" height="150"></canvas>
-    </div>
-
-    <div id="status">準備就緒，請按下開始</div>
-    <div id="audioLinkContainer"></div>
 
 <script>
 /* ==============================
-   1. 變數與設定
+   0. 選單控制
+   ============================== */
+function toggleMenu() {
+    const menu = document.getElementById('dropdownMenu');
+    menu.classList.toggle('show');
+}
+
+// 點擊畫面其他地方關閉選單
+window.onclick = function(event) {
+    if (!event.target.matches('.menu-btn')) {
+        const dropdowns = document.getElementsByClassName("dropdown-menu");
+        for (let i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].classList.contains('show')) {
+                dropdowns[i].classList.remove('show');
+            }
+        }
+    }
+}
+
+/* ==============================
+   1. 變數與設定 (沿用穩定版邏輯)
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -230,7 +340,6 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
-// 參數
 const ENERGY_THRESHOLD = 0.002; 
 const RESIZE_ANALYSER_SIZE = 2048;
 const VISUAL_GAIN = 3.0; 
@@ -260,7 +369,7 @@ let afArray = null;
 let lastPitchTime = 0;
 
 /* ==============================
-   2. 演算法
+   2. 演算法 (保持不變)
    ============================== */
 function closestString(freq){
   let bestName = "--", bestF = freq, bestDiff = Infinity;
@@ -330,19 +439,15 @@ function autocorrWithCheck(buffer, sampleRate){
 }
 
 /* ==============================
-   3. 繪圖 (全新設計)
+   3. 繪圖 (保持不變)
    ============================== */
-
-// 畫波形 (線條版 - 螢光綠)
 function drawWave(input, ctx, canvas) {
   if (!ctx || !canvas) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!input || input.length === 0) return;
-
   ctx.lineWidth = 2; 
-  ctx.strokeStyle = '#2ecc71'; // 螢光綠
+  ctx.strokeStyle = '#2ecc71'; 
   ctx.beginPath();
-
   const step = Math.ceil(input.length / canvas.width); 
   let x = 0;
   for (let i = 0; i < canvas.width; i++) {
@@ -357,51 +462,37 @@ function drawWave(input, ctx, canvas) {
   ctx.stroke();
 }
 
-// ★★★ 全新儀表板繪製邏輯 ★★★
 function drawGauge(cents) {
     const w = gaugeCanvas.width;
     const h = gaugeCanvas.height;
     const cx = w / 2;
-    const cy = h - 40; // 圓心稍微往上，留空間給數字
+    const cy = h - 40; 
     const radius = h - 80;
 
     gctx.clearRect(0, 0, w, h);
 
-    // 1. 畫 "準確區" (Target Sector) - 綠色扇形背景
-    // 範圍: -10 cents 到 +10 cents
+    // 準確區
     gctx.save();
     gctx.beginPath();
     gctx.moveTo(cx, cy);
-    // 角度換算: -50=PI, +50=2PI. 每 cent = PI/100 弧度
-    // PI + PI/2 = 1.5PI (中央)
-    // -10 cents => 1.5PI - (10 * PI/100) = 1.4PI
-    // +10 cents => 1.5PI + (10 * PI/100) = 1.6PI
     const startAngle = Math.PI * 1.4;
     const endAngle = Math.PI * 1.6;
-    
     gctx.arc(cx, cy, radius + 20, startAngle, endAngle);
-    gctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; // 半透明綠色
+    gctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; 
     gctx.fill();
     gctx.restore();
 
-    // 2. 畫刻度線 (Ticks)
+    // 刻度
     gctx.save();
     gctx.translate(cx, cy);
-    // 總範圍 -50 到 +50
-    for (let i = -50; i <= 50; i+=2) { // 每2單位一格
-        // 角度: map -50..+50 to PI..2PI
-        // angle = PI + (i + 50)/100 * PI
+    for (let i = -50; i <= 50; i+=2) { 
         const angle = Math.PI + ((i + 50) / 100) * Math.PI;
-        
         const isCenter = (i === 0);
-        const isMajor = (i % 10 === 0); // 每10單位一個大刻度
+        const isMajor = (i % 10 === 0); 
+        let color = '#6c757d'; 
+        if (Math.abs(i) <= 10) color = '#2ecc71'; 
+        else if (isMajor) color = '#adb5bd'; 
         
-        // 顏色邏輯: 接近0是綠色，其他是白色/灰色
-        let color = '#6c757d'; // 預設深灰
-        if (Math.abs(i) <= 10) color = '#2ecc71'; // 綠色區域
-        else if (isMajor) color = '#adb5bd'; // 大刻度亮一點
-        
-        // 長度邏輯
         const len = isCenter ? 25 : (isMajor ? 15 : 8);
         const thickness = isCenter ? 3 : (isMajor ? 2 : 1);
         
@@ -415,43 +506,27 @@ function drawGauge(cents) {
         gctx.strokeStyle = color;
         gctx.stroke();
 
-        // 3. 畫數字 (Numbers)
-        // 只在 -50, -20, 0, +20, +50 顯示數字
         const showNumbers = [-50, -20, 0, 20, 50];
         if (showNumbers.includes(i)) {
-            const textRadius = radius - 25; // 數字在內圈
+            const textRadius = radius - 25; 
             const tx = Math.cos(angle) * textRadius;
             const ty = Math.sin(angle) * textRadius;
             
             gctx.save();
             gctx.translate(tx, ty);
-            gctx.rotate(angle - Math.PI/2); // 讓文字轉正 (可選，這裡選擇轉正)
-            // 或是不要轉正，直接平放：
-            // gctx.rotate(0); 
-            
-            gctx.fillStyle = (i === 0) ? '#2ecc71' : '#868e96';
-            gctx.font = (i === 0) ? 'bold 18px Arial' : '14px Arial';
-            gctx.textAlign = 'center';
-            gctx.textBaseline = 'middle';
-            
-            // 如果不旋轉畫布，文字會是歪的，所以簡單處理：
-            // 這裡為了閱讀方便，我們不旋轉文字，而是直接畫在座標上
-            gctx.restore(); // 還原旋轉
-            
-            // 重新計算文字位置 (不旋轉)
+            gctx.rotate(angle - Math.PI/2); 
             gctx.font = (i === 0) ? 'bold 20px Arial' : '16px Arial';
             gctx.fillStyle = (i === 0) ? '#2ecc71' : '#6c757d';
-            gctx.fillText(i, tx, ty);
+            gctx.textAlign = 'center';
+            gctx.textBaseline = 'middle';
+            gctx.fillText(i, 0, 0);
+            gctx.restore();
         }
     }
     gctx.restore();
 
-    // 4. 畫指針 (Needle)
     let safeCents = cents;
-    if (cents === -999 || cents === null) safeCents = -50; // 歸零時指到最左邊或中間? 這裡設為最左邊比較像沒訊號，或者設為 0
-    // 為了美觀，歸零設為 -90 (消失) 或 0 (中間)。通常設為 0 並變灰。
-    // 這裡設為如果不顯示，就不畫指針
-    if(cents === -999) return; 
+    if (cents === -999 || cents === null) return; 
 
     safeCents = Math.max(-50, Math.min(50, safeCents));
     const needleAngle = Math.PI + ((safeCents + 50) / 100) * Math.PI;
@@ -464,12 +539,10 @@ function drawGauge(cents) {
     gctx.moveTo(cx, cy);
     gctx.lineTo(nx, ny);
     gctx.lineWidth = 4;
-    // 顏色: 準確(+-5)變綠，偏離變紅
     gctx.strokeStyle = (Math.abs(safeCents) < 5) ? '#2ecc71' : '#e74c3c';
     gctx.lineCap = 'round';
     gctx.stroke();
     
-    // 指針中心蓋子
     gctx.beginPath();
     gctx.arc(cx, cy, 8, 0, 2*Math.PI);
     gctx.fillStyle = '#495057';
@@ -513,7 +586,7 @@ startBtn.addEventListener('click', async () => {
     analyser.connect(zeroGain);
     zeroGain.connect(audioCtx.destination);
 
-    statusEl.textContent = "偵測中...請撥弦";
+    statusEl.textContent = "偵測中...";
     stopBtn.disabled = false;
     recBtn.disabled = false;
 
@@ -596,7 +669,6 @@ function loop() {
        drawGauge(res.cents);
     }
   } else if (rms < ENERGY_THRESHOLD) {
-      // 保持安靜時指針消失或歸零
       drawGauge(-999);
   }
 }
