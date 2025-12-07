@@ -770,8 +770,29 @@ function loop() {
        
        drawGauge(res.cents);
     }
+    
   } else if (rms < ENERGY_THRESHOLD) {
+      // 這裡處理「沒聲音」或「雜訊」的狀態
+      
+      // 1. 讓指針歸零
       drawGauge(-999);
+      
+      // 2. 智慧提示文字 (新增的功能)
+      freqEl.textContent = '0.0 Hz';
+      
+      // 判斷是「完全沒聲音」還是「太小聲」
+      if (rms < 0.0001) {
+          // 幾乎是 0，代表沒人在彈，或是麥克風沒收到音
+          centsEl.textContent = '等待輸入...';
+          centsEl.style.color = '#6c757d'; // 灰色
+          noteEl.textContent = '--';
+      } else {
+          // 有一點點聲音 (0.0001 ~ 0.002)，可能是撥太小聲或離太遠
+          // 這裡給予溫和的提示
+          centsEl.textContent = '請撥大力點';
+          centsEl.style.color = '#e74c3c'; // 紅色提醒
+          noteEl.textContent = '?'; // 表示聽不清楚
+      }
   }
 }
 
