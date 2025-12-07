@@ -153,7 +153,7 @@
     }
     .rhythm-box strong { color: var(--accent-yellow); display: block; margin-bottom: 5px; font-size: 12px;}
 
-    /* --- 1. 修改：計時器樣式優化 --- */
+    /* 計時器樣式 */
     .timer-section {
         background: #23272b;
         padding: 20px;
@@ -168,7 +168,7 @@
         font-size: 56px; 
         font-weight: 700; 
         margin: 10px 0; 
-        font-family: 'Courier New', Courier, monospace; /* 數位風格 */
+        font-family: 'Courier New', Courier, monospace;
         color: #fff;
         text-shadow: 0 0 20px rgba(255,255,255,0.1);
     }
@@ -320,7 +320,7 @@
             </div>
 
             <div class="chord-section">
-                <div class="chord-title">🔥 晴天 - 參考和弦 (標準按法)</div>
+                <div class="chord-title">🔥 晴天 - 參考和弦 (自訂按法)</div>
                 <div class="chord-grid">
                     
                     <div class="chord-card" onclick="playChordTone('Em7')">
@@ -337,13 +337,11 @@
                             <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
                             <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             
+                            <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/>
                             <circle cx="32" cy="60" r="4" fill="#000"/>
                             <circle cx="44" cy="60" r="4" fill="#000"/>
-                            <circle cx="68" cy="80" r="4" fill="#000"/>
-                            <circle cx="80" cy="80" r="4" fill="#000"/>
-                            <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/>
                             <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                        </svg>
+                            <circle cx="68" cy="80" r="4" fill="#000"/> <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/> </svg>
                         <div class="chord-name">Em7</div>
                     </div>
 
@@ -357,9 +355,7 @@
                             <circle cx="32" cy="80" r="4" fill="#000"/>
                             <circle cx="44" cy="60" r="4" fill="#000"/>
                             <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="80" r="4" fill="#000"/>
-                            <circle cx="80" cy="80" r="4" fill="#000"/>
-                        </svg>
+                            <circle cx="68" cy="80" r="4" fill="#000"/> <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/> </svg>
                         <div class="chord-name">Cadd9</div>
                     </div>
 
@@ -373,9 +369,7 @@
                             <circle cx="32" cy="60" r="4" fill="#000"/>
                             <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/>
                             <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="80" r="4" fill="#000"/>
-                            <circle cx="80" cy="80" r="4" fill="#000"/>
-                        </svg>
+                            <circle cx="68" cy="80" r="4" fill="#000"/> <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/> </svg>
                         <div class="chord-name">G</div>
                     </div>
 
@@ -385,13 +379,10 @@
                             <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             
-                            <circle cx="20" cy="60" r="4" fill="#000"/>
-                            <text x="28" y="12" font-size="10" fill="#333">x</text>
-                            <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="56" cy="60" r="4" fill="#000"/>
-                            <circle cx="68" cy="80" r="4" fill="#000"/>
-                            <circle cx="80" cy="60" r="4" fill="#000"/>
-                        </svg>
+                            <circle cx="20" cy="60" r="4" fill="#000"/> <text x="28" y="12" font-size="10" fill="#333">x</text>
+                            <text x="40" y="12" font-size="10" fill="#333">x</text>
+                            
+                            <circle cx="56" cy="60" r="4" fill="#000"/> <circle cx="68" cy="80" r="4" fill="#000"/> <circle cx="80" cy="60" r="4" fill="#000"/> </svg>
                         <div class="chord-name">D/F#</div>
                     </div>
 
@@ -434,46 +425,41 @@ function toggleFullScreen() {
     else if (document.exitFullscreen) document.exitFullscreen();
 }
 
-// 2. 修改：聲音合成器 (修復 Em, D, A, E, F/Dm7 聲音問題)
+// 2. 修改：聲音合成器 (依據使用者指定的 022030, x32030, 320030, 2xx232)
 function playChordTone(chordName) {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(audioCtx.state === 'suspended') audioCtx.resume();
 
     // 定義準確的吉他頻率
-    // 標準: E2=82, A2=110, D3=146, G3=196, B3=247, E4=330
     const tones = {
-        // 晴天專用和弦
-        'Em7': [82.4, 123.5, 164.8, 196.0, 246.9, 329.6], // Em7 (022033) 其實高音跟Em很像，為了區別可以稍微強調高頻
-        'Cadd9': [130.8, 146.8, 196.0, 246.9, 329.6], // x32033
-        'G': [98.0, 123.5, 146.8, 196.0, 246.9, 392.0], // 320033
-        'D/F#': [92.5, 146.8, 196.0, 246.9, 370.0], // 2x0232
+        // 晴天指定按法
+        'Em7': [82.4, 123.5, 164.8, 196.0, 293.7, 329.6], // 022030 (2弦是3品D, 1弦空弦E)
+        'Cadd9': [130.8, 164.8, 196.0, 293.7, 329.6], // x32030 (2弦是3品D, 1弦空弦E)
+        'G': [98.0, 123.5, 146.8, 196.0, 293.7, 329.6], // 320030 (2弦是3品D, 1弦空弦E)
+        'D/F#': [92.5, 220.0, 293.7, 370.0], // 2xx232 (6弦F#, 3弦A, 2弦D, 1弦F#)
 
-        // 通用和弦庫 (補齊缺少的和弦)
-        'E': [82.4, 123.5, 164.8, 207.6, 246.9, 329.6], // 022100
-        'Em': [82.4, 123.5, 164.8, 196.0, 246.9, 329.6], // 022000
-        'A': [110.0, 164.8, 220.0, 277.2, 329.6], // x02220
-        'Am': [110.0, 164.8, 220.0, 261.6, 329.6], // x02210
-        'D': [146.8, 220.0, 293.7, 370.0], // xx0232
-        'C': [130.8, 164.8, 196.0, 261.6, 329.6], // x32010
-        
-        // F vs Dm7 (區分關鍵在於根音)
-        'F': [87.3, 130.8, 174.6, 220.0, 261.6, 349.2], // 133211 (封閉和弦，聲音較厚)
-        'Dm7': [146.8, 220.0, 261.6, 349.2] // xx0211 (根音是D，聲音較亮)
+        // 通用和弦庫
+        'E': [82.4, 123.5, 164.8, 207.6, 246.9, 329.6],
+        'Em': [82.4, 123.5, 164.8, 196.0, 246.9, 329.6],
+        'A': [110.0, 164.8, 220.0, 277.2, 329.6],
+        'Am': [110.0, 164.8, 220.0, 261.6, 329.6],
+        'D': [146.8, 220.0, 293.7, 370.0],
+        'C': [130.8, 164.8, 196.0, 261.6, 329.6],
+        'F': [87.3, 130.8, 174.6, 220.0, 261.6, 349.2],
+        'Dm7': [146.8, 220.0, 261.6, 349.2]
     };
 
-    const notes = tones[chordName] || [261, 329, 392]; // 如果真的找不到，才用預設
+    const notes = tones[chordName] || [261, 329, 392];
     const now = audioCtx.currentTime;
     
     notes.forEach((freq, i) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        // 用 triangle 波形比較接近撥弦感
         osc.type = 'triangle';
         osc.frequency.value = freq;
         
-        // 模擬撥弦的聲音包絡 (Attack & Decay)
         gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.15, now + 0.05 + i * 0.02); // 稍微錯開時間模擬掃弦
+        gain.gain.linearRampToValueAtTime(0.15, now + 0.05 + i * 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
         
         osc.connect(gain);
@@ -487,7 +473,6 @@ function renderLibrary() {
     const grid = document.getElementById('libraryGrid');
     if(grid.children.length > 0) return;
     
-    // 這裡的和弦會對應上面的 playChordTone 字典
     const chords = ['C', 'Am', 'F', 'G', 'Em', 'Dm7', 'D', 'A', 'E'];
     chords.forEach(c => {
         const div = document.createElement('div');
@@ -507,7 +492,6 @@ function toggleTimer() {
         clearInterval(timerInterval);
         timerInterval = null;
         btn.textContent = "繼續計時";
-        btn.classList.remove('recording'); // Reuse recording style for active state if needed
         btn.style.background = "#343a40";
         btn.style.color = "white";
         btn.style.borderColor = "#555";
@@ -878,7 +862,6 @@ function loop() {
     }
   } else if (rms < ENERGY_THRESHOLD) {
       drawGauge(-999);
-      // 智慧提示 (新增)
       if (rms < 0.0001) {
           centsEl.textContent = '等待輸入...';
           centsEl.style.color = '#6c757d';
