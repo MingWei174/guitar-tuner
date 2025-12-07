@@ -279,73 +279,69 @@
                 <div style="margin-top:5px;"><strong>🖐️ 參考指法 (Picking)</strong>T1 21 T1 21</div>
             </div>
 
+            <div class="timer-section">
+                <div style="font-size:14px; color:#adb5bd;">⏳ 本次練習時間</div>
+                <div class="timer-display" id="timerDisplay">00:00</div>
+                <div>
+                    <button class="timer-btn" onclick="toggleTimer()" id="timerBtn">開始</button>
+                    <button class="timer-btn" onclick="resetTimer()">重置</button>
+                </div>
+            </div>
+
             <div class="chord-section">
-                <div class="chord-title">🔥 晴天 - 參考和弦 (Em7/Cadd9版)</div>
+                <div class="chord-title">🔥 晴天 - 參考和弦 (標準按法)</div>
                 <div class="chord-grid">
-    
-    <div class="chord-card" onclick="playChordTone('Em7')">
-        <svg viewBox="0 0 100 120">
-            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                    
+                    <div class="chord-card" onclick="playChordTone('Em7')">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <circle cx="32" cy="50" r="4" fill="#000"/> <circle cx="44" cy="50" r="4" fill="#000"/>
+                            <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/>
+                            <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/><circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">Em7</div>
+                    </div>
 
-            <circle cx="32" cy="50" r="4" fill="#000"/> <circle cx="44" cy="50" r="4" fill="#000"/> <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/> <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/>
-            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-        </svg>
-        <div class="chord-name">Em7</div>
-    </div>
+                    <div class="chord-card" onclick="playChordTone('Cadd9')">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <text x="16" y="12" font-size="10" fill="#333">x</text>
+                            <circle cx="32" cy="70" r="4" fill="#000"/> <circle cx="44" cy="50" r="4" fill="#000"/>
+                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/>
+                        </svg>
+                        <div class="chord-name">Cadd9</div>
+                    </div>
 
-    <div class="chord-card" onclick="playChordTone('Cadd9')">
-        <svg viewBox="0 0 100 120">
-            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                    <div class="chord-card" onclick="playChordTone('G')">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <circle cx="20" cy="70" r="4" fill="#000"/> <circle cx="32" cy="50" r="4" fill="#000"/>
+                            <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/>
+                            <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/><circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">G</div>
+                    </div>
 
-            <text x="16" y="12" font-size="10" fill="#333">x</text> <circle cx="32" cy="70" r="4" fill="#000"/> <circle cx="44" cy="50" r="4" fill="#000"/> <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/> <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/> </svg>
-        <div class="chord-name">Cadd9</div>
-    </div>
+                    <div class="chord-card" onclick="playChordTone('D/F#')">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <circle cx="20" cy="30" r="4" fill="#000"/> 
+                            <circle cx="56" cy="30" r="4" fill="#000"/> <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/>
+                            <text x="28" y="12" font-size="10" fill="#333">x</text>
+                        </svg>
+                        <div class="chord-name">D/F#</div>
+                    </div>
 
-    <div class="chord-card" onclick="playChordTone('G')">
-        <svg viewBox="0 0 100 120">
-            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <circle cx="20" cy="70" r="4" fill="#000"/> <circle cx="32" cy="50" r="4" fill="#000"/>
-            <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="70" r="4" fill="#000"/>
-            <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/><circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-        </svg>
-        <div class="chord-name">G</div>
-    </div>
-
-    <div class="chord-card" onclick="playChordTone('D/F#')">
-        <svg viewBox="0 0 100 120">
-            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-            <circle cx="20" cy="50" r="4" fill="#000"/> 
-            <circle cx="56" cy="50" r="4" fill="#000"/> <circle cx="68" cy="70" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/>
-            <text x="28" y="12" font-size="10" fill="#333">x</text>
-        </svg>
-        <div class="chord-name">D/F#</div>
-    </div>
-
-</div>
+                </div>
                 <div class="chord-footer">
                     * 點擊和弦圖示可試聽聲音。<br>
                     * 黑點代表按壓位置，空心圈代表空弦，X 代表不彈。
@@ -384,24 +380,23 @@ function toggleFullScreen() {
     else if (document.exitFullscreen) document.exitFullscreen();
 }
 
-// 簡單的聲音合成器 (試聽和弦)
+// 聲音合成器
 function playChordTone(chordName) {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(audioCtx.state === 'suspended') audioCtx.resume();
 
-    // 簡單定義和弦組成音 (大概頻率)
     const tones = {
-        'Em7': [82, 123, 164, 196, 246, 329], // E G D G B E
-        'Cadd9': [130, 146, 196, 246, 329],   // C E G D E
-        'G': [98, 123, 146, 196, 246, 329],   // G B D G B E
-        'D/F#': [92, 146, 185, 246, 370],     // F# A D F# A
+        'Em7': [82, 123, 164, 196, 246, 329],
+        'Cadd9': [130, 146, 196, 246, 329],
+        'G': [98, 123, 146, 196, 246, 329],
+        'D/F#': [92, 146, 185, 246, 370],
         'C': [130, 164, 196, 261, 329],
         'Am': [110, 164, 220, 261, 329],
         'F': [87, 130, 174, 220, 261, 349],
         'Dm7': [146, 220, 261, 349]
     };
 
-    const notes = tones[chordName] || [261, 329, 392]; // 預設 C major
+    const notes = tones[chordName] || [261, 329, 392];
     const now = audioCtx.currentTime;
     
     notes.forEach((freq, i) => {
@@ -409,36 +404,62 @@ function playChordTone(chordName) {
         const gain = audioCtx.createGain();
         osc.type = 'triangle';
         osc.frequency.value = freq;
-        
         gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5); // 1.5秒衰減
-        
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        
-        // 模擬撥弦延遲
         osc.start(now + i * 0.05);
         osc.stop(now + 2);
     });
 }
 
-// 生成和弦庫內容 (為了節省空間，這裡簡化顯示文字卡片，實際專案可換成 SVG)
 function renderLibrary() {
     const grid = document.getElementById('libraryGrid');
-    if(grid.children.length > 0) return; // 已經產生過就不重跑
+    if(grid.children.length > 0) return;
     
     const chords = ['C', 'Am', 'F', 'G', 'Em', 'Dm7', 'D', 'A', 'E'];
     chords.forEach(c => {
         const div = document.createElement('div');
         div.className = 'chord-card';
-        div.innerHTML = `<div style="font-size:24px; padding:15px 0;">${c}</div><div class="chord-name">播放</div>`;
+        // 關鍵修改：加入 color:#333 讓文字在白底上可見
+        div.innerHTML = `<div style="font-size:24px; padding:15px 0; color:#333; font-weight:bold;">${c}</div><div class="chord-name">播放</div>`;
         div.onclick = () => playChordTone(c);
         grid.appendChild(div);
     });
 }
 
+// 計時器
+let timerInterval = null;
+let timerSeconds = 0;
+function toggleTimer() {
+    const btn = document.getElementById('timerBtn');
+    if(timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.textContent = "繼續";
+        btn.style.background = "#444";
+    } else {
+        timerInterval = setInterval(() => {
+            timerSeconds++;
+            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const secs = (timerSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
+        }, 1000);
+        btn.textContent = "暫停";
+        btn.style.background = "#d35400";
+    }
+}
+function resetTimer() {
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    timerSeconds = 0;
+    document.getElementById('timerDisplay').textContent = "00:00";
+    document.getElementById('timerBtn').textContent = "開始";
+    document.getElementById('timerBtn').style.background = "#444";
+}
+
 /* ==============================
-   1. 調音變數 (含多種調音模式)
+   1. 調音變數
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -454,24 +475,21 @@ const ENERGY_THRESHOLD = 0.002;
 const RESIZE_ANALYSER_SIZE = 2048;
 const VISUAL_GAIN = 3.0; 
 
-// 定義不同調音模式
 const TUNING_MODES = {
     'Standard': { "E2": 82.41, "A2": 110.00, "D3": 146.83, "G3": 196.00, "B3": 246.94, "E4": 329.63 },
-    'HalfStep': { "Eb2": 77.78, "Ab2": 103.83, "Db3": 138.59, "Gb3": 185.00, "Bb3": 233.08, "Eb4": 311.13 }, // 半音降
-    'DropD':    { "D2": 73.42, "A2": 110.00, "D3": 146.83, "G3": 196.00, "B3": 246.94, "E4": 329.63 }    // Drop D
+    'HalfStep': { "Eb2": 77.78, "Ab2": 103.83, "Db3": 138.59, "Gb3": 185.00, "Bb3": 233.08, "Eb4": 311.13 },
+    'DropD':    { "D2": 73.42, "A2": 110.00, "D3": 146.83, "G3": 196.00, "B3": 246.94, "E4": 329.63 }
 };
-
 let currentTuning = TUNING_MODES['Standard'];
 
 function changeTuning() {
     const mode = document.getElementById('tuningSelect').value;
     currentTuning = TUNING_MODES[mode];
-    // 更新顯示文字
     const labels = { 'Standard': 'A4=440Hz', 'HalfStep': 'Eb Tuning', 'DropD': 'Drop D' };
     document.getElementById('baseFreqLabel').textContent = labels[mode];
 }
 
-// UI 元素
+// UI
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const recBtn = document.getElementById('recBtn');
@@ -499,10 +517,7 @@ function closestString(freq){
     const diff = Math.abs(1200 * Math.log2(freq / f));
     if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
   }
-  if(bestDiff > 200) { 
-      // 簡單顯示音名 (略過複雜計算)
-      bestName = "?"; 
-  }
+  if(bestDiff > 200) bestName = "?"; 
   const cents = 1200 * Math.log2(freq / bestF);
   return {name: bestName, targetF: bestF, cents: cents};
 }
@@ -783,28 +798,17 @@ function loop() {
        
        drawGauge(res.cents);
     }
-    
   } else if (rms < ENERGY_THRESHOLD) {
-      // 這裡處理「沒聲音」或「雜訊」的狀態
-      
-      // 1. 讓指針歸零
       drawGauge(-999);
-      
-      // 2. 智慧提示文字 (新增的功能)
-      freqEl.textContent = '0.0 Hz';
-      
-      // 判斷是「完全沒聲音」還是「太小聲」
+      // 智慧提示 (新增)
       if (rms < 0.0001) {
-          // 幾乎是 0，代表沒人在彈，或是麥克風沒收到音
           centsEl.textContent = '等待輸入...';
-          centsEl.style.color = '#6c757d'; // 灰色
+          centsEl.style.color = '#6c757d';
           noteEl.textContent = '--';
       } else {
-          // 有一點點聲音 (0.0001 ~ 0.002)，可能是撥太小聲或離太遠
-          // 這裡給予溫和的提示
           centsEl.textContent = '請撥大力點';
-          centsEl.style.color = '#e74c3c'; // 紅色提醒
-          noteEl.textContent = '?'; // 表示聽不清楚
+          centsEl.style.color = '#e74c3c';
+          noteEl.textContent = '?';
       }
   }
 }
