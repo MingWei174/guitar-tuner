@@ -1,9 +1,7 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>吉他新手工作站 (Ultimate Edition)</title>
+<title>吉他新手工作站 (Pro Edition)</title>
 <style>
     :root {
         --bg-color: #1e2126;
@@ -41,10 +39,17 @@
         position: relative;
     }
 
-    h1 { font-size: 20px; margin: 0; font-weight: 600; letter-spacing: 1px; }
+    h1 { font-size: 20px; margin: 0; font-weight: 600; letter-spacing: 1px; display: flex; align-items: center; gap: 10px;}
 
+    .header-left { display: flex; align-items: center; gap: 15px; }
     .menu-btn { font-size: 24px; color: #adb5bd; cursor: pointer; user-select: none; padding: 5px; }
-    
+    .chord-lib-btn { 
+        background: #3a3f45; color: #fff; border: 1px solid #555; 
+        padding: 5px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .chord-lib-btn:hover { background: #495057; color: var(--accent-yellow); border-color: var(--accent-yellow); }
+
     /* 下拉選單 */
     .dropdown-menu {
         position: absolute;
@@ -72,20 +77,11 @@
         gap: 10px;
     }
     .dropdown-menu a:hover { background-color: #3a3f45; color: var(--accent-green); }
-    .dropdown-menu a:last-child { border-bottom: none; }
 
     .rec-btn {
-        background: #343a40;
-        border: 1px solid #495057;
-        color: #fff;
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        background: #343a40; border: 1px solid #495057; color: #fff;
+        padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px;
+        cursor: pointer; display: flex; align-items: center; gap: 6px;
     }
     .rec-dot { width: 8px; height: 8px; background-color: var(--accent-red); border-radius: 50%; }
     .rec-btn.recording { background-color: rgba(231, 76, 60, 0.2); border-color: var(--accent-red); color: var(--accent-red); }
@@ -93,21 +89,21 @@
 
     /* --- Main Layout --- */
     .main-container {
-        display: flex;
-        flex-wrap: wrap;
-        width: 100%;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-        gap: 20px;
-        box-sizing: border-box;
-        justify-content: center;
+        display: flex; flex-wrap: wrap; width: 100%; max-width: 1200px;
+        margin: 0 auto; padding: 20px; gap: 20px; box-sizing: border-box; justify-content: center;
     }
-
     .left-panel { flex: 1; min-width: 340px; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
     .right-panel { flex: 1; min-width: 340px; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
 
     /* --- Tuner Styles --- */
+    .tuner-settings {
+        width: 100%; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .tuning-select {
+        background: #212529; color: var(--accent-blue); border: 1px solid #444; 
+        padding: 5px 10px; border-radius: 6px; font-size: 14px; outline: none;
+    }
+
     .controls { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; justify-content: center;}
     .main-btn {
         background: var(--accent-green); color: #fff; border: none; padding: 12px 32px; border-radius: 30px;
@@ -117,19 +113,10 @@
     .stop-btn { background: var(--accent-red); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
 
     .tuner-body {
-        background-color: var(--panel-bg);
-        width: 100%;
-        border-radius: 24px;
-        padding: 20px;
-        text-align: center;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        border: 1px solid #3a3f45;
-        box-sizing: border-box;
+        background-color: var(--panel-bg); width: 100%; border-radius: 24px; padding: 20px;
+        text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column;
+        align-items: center; border: 1px solid #3a3f45; box-sizing: border-box;
     }
-
     .info-row { display: flex; justify-content: space-between; width: 100%; color: var(--text-sub); font-size: 12px; margin-bottom: 5px; }
     #gaugeCanvas { width: 100%; height: auto; display: block; margin-top: 5px; }
     .note-display { font-size: 80px; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
@@ -146,81 +133,75 @@
     a.download-link { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dashed; font-size: 14px; display: block; margin-top: 5px;}
     audio { width: 100%; margin-top: 5px; height: 36px; }
 
-    /* --- Right Panel: Tools & Video --- */
-    
-    /* 搜尋列 */
-    .search-bar {
-        display: flex; gap: 10px; margin-bottom: 5px;
-    }
-    .search-input {
-        flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #444; 
-        background: #1a1d20; color: white; font-size: 14px;
-    }
-    .search-btn {
-        background: #343a40; color: white; border: 1px solid #444; 
-        padding: 0 15px; border-radius: 8px; cursor: pointer;
-    }
+    /* --- Right Panel --- */
+    .search-bar { display: flex; gap: 10px; margin-bottom: 5px; }
+    .search-input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #444; background: #1a1d20; color: white; font-size: 14px; }
+    .search-btn { background: #343a40; color: white; border: 1px solid #444; padding: 0 15px; border-radius: 8px; cursor: pointer; }
 
-    /* 影片區 */
     .video-wrapper {
         width: 100%; background: #000; border-radius: 12px; overflow: hidden;
         aspect-ratio: 16 / 9; border: 1px solid #444;
     }
     .video-wrapper iframe { width: 100%; height: 100%; border: none; }
 
-    /* 計時器區塊 (新增) */
-    .timer-section {
-        background: var(--panel-bg); border-radius: 12px; padding: 15px;
-        border: 1px solid #3a3f45; display: flex; align-items: center; justify-content: space-between;
+    /* 節奏與指法看板 */
+    .rhythm-box {
+        background: #23272b; padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent-yellow);
+        margin-bottom: 10px; font-family: monospace; font-size: 14px; color: #ddd; line-height: 1.6;
     }
-    .timer-display { font-size: 24px; font-weight: bold; font-family: monospace; color: var(--accent-yellow); }
-    .timer-btn { 
-        background: #444; color: white; border: none; padding: 5px 12px; 
-        border-radius: 6px; cursor: pointer; font-size: 14px; 
-    }
-    .timer-btn:hover { background: #555; }
+    .rhythm-box strong { color: var(--accent-yellow); display: block; margin-bottom: 5px; font-size: 12px;}
 
-    /* 和弦區塊 */
-    .chord-section {
-        background: var(--panel-bg); border-radius: 12px; padding: 20px;
-        border: 1px solid #3a3f45;
-    }
+    .chord-section { background: var(--panel-bg); border-radius: 12px; padding: 20px; border: 1px solid #3a3f45; }
     .chord-title { font-size: 16px; margin-bottom: 15px; color: var(--accent-green); font-weight: bold; display: flex; align-items: center; gap: 8px;}
+    .chord-grid { display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap; }
     
-    .chord-grid {
-        display: flex; gap: 15px; justify-content: space-around; flex-wrap: wrap;
-    }
-    
-    /* SVG 和弦圖樣式 */
-    .chord-card {
-        text-align: center;
-        background: #fff;
-        padding: 5px;
-        border-radius: 6px;
-        width: 80px;
-    }
+    .chord-card { text-align: center; background: #fff; padding: 5px; border-radius: 6px; width: 85px; cursor: pointer; transition: transform 0.1s;}
+    .chord-card:active { transform: scale(0.95); }
     .chord-card svg { width: 100%; height: auto; display: block;}
-    .chord-name { 
-        color: #333; font-weight: bold; font-size: 14px; margin-top: 2px; 
-        border-top: 1px solid #eee; padding-top: 2px;
-    }
-
+    .chord-name { color: #333; font-weight: bold; font-size: 14px; margin-top: 2px; border-top: 1px solid #eee; padding-top: 2px; }
     .chord-footer { margin-top: 15px; color: #888; font-size: 12px; line-height: 1.4; border-top: 1px solid #444; padding-top: 10px;}
 
-    @keyframes blink { 50% { opacity: 0; } }
+    /* --- Modal (和弦庫) --- */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 1000; display: none;
+        justify-content: center; align-items: center;
+    }
+    .modal-content {
+        background: var(--panel-bg); width: 90%; max-width: 600px;
+        border-radius: 12px; padding: 20px; border: 1px solid #555;
+        max-height: 80vh; overflow-y: auto;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+    .modal-title { font-size: 20px; font-weight: bold; color: white; }
+    .close-btn { font-size: 24px; color: #aaa; cursor: pointer; }
+    .library-grid { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
 
+    @keyframes blink { 50% { opacity: 0; } }
     @media (max-width: 800px) {
         .main-container { flex-direction: column; align-items: center; }
         .left-panel, .right-panel { width: 100%; max-width: 100%; }
-        .dropdown-menu { width: 200px; }
     }
-
 </style>
 </head>
 <body>
 
+    <div class="modal-overlay" id="chordModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📖 常用和弦庫 (點擊試聽)</div>
+                <div class="close-btn" onclick="toggleChordLib()">×</div>
+            </div>
+            <div class="library-grid" id="libraryGrid">
+                </div>
+        </div>
+    </div>
+
     <header>
-        <div class="menu-btn" onclick="toggleMenu()" title="選單">☰</div>
+        <div class="header-left">
+            <div class="menu-btn" onclick="toggleMenu()" title="選單">☰</div>
+            <div class="chord-lib-btn" onclick="toggleChordLib()">📖 和弦庫</div>
+        </div>
         
         <div class="dropdown-menu" id="dropdownMenu">
             <a href="https://www.91pu.com.tw/" target="_blank">🎸 91 譜 (吉他譜網站)</a>
@@ -242,6 +223,15 @@
     <div class="main-container">
         
         <div class="left-panel">
+            <div class="tuner-settings">
+                <span style="font-size:12px; color:#888;">調音模式:</span>
+                <select id="tuningSelect" class="tuning-select" onchange="changeTuning()">
+                    <option value="Standard">標準 (Standard)</option>
+                    <option value="HalfStep">半音降 (Eb/D#)</option>
+                    <option value="DropD">Drop D</option>
+                </select>
+            </div>
+
             <div class="controls">
                 <button id="startBtn" class="main-btn">▶ 開始調音</button>
                 <button id="stopBtn" class="main-btn stop-btn" disabled>■ 停止</button>
@@ -249,7 +239,7 @@
 
             <div class="tuner-body">
                 <div class="info-row">
-                    <span>A4 = 440Hz</span>
+                    <span id="baseFreqLabel">A4 = 440Hz</span>
                     <span id="debugInfo">RMS: 0.0000</span>
                 </div>
 
@@ -264,118 +254,79 @@
                 <canvas id="waveCanvas" width="600" height="150"></canvas>
             </div>
 
-            <div id="status">準備就緒，請按下開始 (建議使用 Chrome/Edge)</div>
+            <div id="status">準備就緒，請按下開始</div>
             <div id="audioLinkContainer"></div>
         </div>
 
         <div class="right-panel">
             
             <div class="search-bar">
-                <input type="text" id="ytSearch" class="search-input" placeholder="輸入歌曲名稱 (例: 晴天 吉他教學)...">
+                <input type="text" id="ytSearch" class="search-input" placeholder="搜尋影片 (例: 晴天 吉他教學)...">
                 <button class="search-btn" onclick="searchYouTube()">🔍 搜尋</button>
             </div>
 
             <div class="video-wrapper">
                 <iframe 
-                    src="https://www.youtube.com/embed/videoseries?list=PLMWOrj-pmqk1De7urlm4UiTRX5AuH4Qku" 
+                    src="https://www.youtube.com/embed/uToqzDy5fU0?list=PLMWOrj-pmqk1De7urlm4UiTRX5AuH4Qku" 
                     title="YouTube video player" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                     allowfullscreen>
                 </iframe>
             </div>
 
-            <div class="timer-section">
-                <div style="font-size:14px; color:#adb5bd;">⏳ 本次練習時間</div>
-                <div class="timer-display" id="timerDisplay">00:00</div>
-                <div>
-                    <button class="timer-btn" onclick="toggleTimer()" id="timerBtn">開始</button>
-                    <button class="timer-btn" onclick="resetTimer()">重置</button>
-                </div>
+            <div class="rhythm-box">
+                <div><strong>🎵 參考刷法 (Strumming)</strong>X ↑--↓ -↓↑↓ ↑-↑↓</div>
+                <div style="margin-top:5px;"><strong>🖐️ 參考指法 (Picking)</strong>T1 21 T1 21</div>
             </div>
 
             <div class="chord-section">
-                <div class="chord-title">🔥 晴天 - 參考和弦 (標準按法)</div>
+                <div class="chord-title">🔥 晴天 - 參考和弦 (Em7/Cadd9版)</div>
                 <div class="chord-grid">
                     
-                    <div class="chord-card">
-                        <svg viewBox="0 0 100 120">
-                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/> <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-                            
-                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/> <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/> <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/> <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/> <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/> <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/> <circle cx="32" cy="30" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/> <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/>
-                        </svg>
-                        <div class="chord-name">Em</div>
-                    </div>
-
-                    <div class="chord-card">
+                    <div class="chord-card" onclick="playChordTone('Em7')">
                         <svg viewBox="0 0 100 120">
                             <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <circle cx="32" cy="30" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/>
+                            <circle cx="68" cy="50" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/>
+                            <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/><circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">Em7</div>
+                    </div>
 
+                    <div class="chord-card" onclick="playChordTone('Cadd9')">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             <text x="16" y="12" font-size="10" fill="#333">x</text>
-                            
-                            <circle cx="32" cy="50" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/> <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="32" cy="50" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/>
+                            <circle cx="68" cy="50" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/>
+                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
                         </svg>
-                        <div class="chord-name">Cmaj7</div>
+                        <div class="chord-name">Cadd9</div>
                     </div>
 
-                    <div class="chord-card">
+                    <div class="chord-card" onclick="playChordTone('G')">
                         <svg viewBox="0 0 100 120">
                             <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-
-                            <circle cx="20" cy="50" r="4" fill="#000"/> <circle cx="32" cy="30" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/> <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <circle cx="20" cy="50" r="4" fill="#000"/> <circle cx="32" cy="30" r="4" fill="#000"/>
+                            <circle cx="68" cy="50" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/>
+                            <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/><circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
                         </svg>
                         <div class="chord-name">G</div>
                     </div>
 
-                    <div class="chord-card">
+                    <div class="chord-card" onclick="playChordTone('D/F#')">
                         <svg viewBox="0 0 100 120">
                             <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
-                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
-                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             <circle cx="20" cy="30" r="4" fill="#000"/> 
-                            
-                            <circle cx="56" cy="30" r="4" fill="#000"/>
-                            <circle cx="68" cy="50" r="4" fill="#000"/>
-                            <circle cx="80" cy="30" r="4" fill="#000"/>
-                            
+                            <circle cx="56" cy="30" r="4" fill="#000"/> <circle cx="68" cy="50" r="4" fill="#000"/> <circle cx="80" cy="30" r="4" fill="#000"/>
                             <text x="28" y="12" font-size="10" fill="#333">x</text>
                         </svg>
                         <div class="chord-name">D/F#</div>
@@ -383,7 +334,7 @@
 
                 </div>
                 <div class="chord-footer">
-                    * 上方為 "晴天" 常用參考和弦。<br>
+                    * 點擊和弦圖示可試聽聲音。<br>
                     * 黑點代表按壓位置，空心圈代表空弦，X 代表不彈。
                 </div>
             </div>
@@ -393,69 +344,88 @@
 
 <script>
 /* ==============================
-   0. 工具邏輯 (選單, 搜尋, 計時器)
+   0. 工具: 選單, 搜尋, 和弦庫, 聲音合成
    ============================== */
-function toggleMenu() {
-    document.getElementById('dropdownMenu').classList.toggle('show');
+function toggleMenu() { document.getElementById('dropdownMenu').classList.toggle('show'); }
+function toggleChordLib() { 
+    const modal = document.getElementById('chordModal');
+    modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+    if(modal.style.display === 'flex') renderLibrary();
 }
 
-window.onclick = function(event) {
-    if (!event.target.matches('.menu-btn')) {
-        const dropdowns = document.getElementsByClassName("dropdown-menu");
-        for (let i = 0; i < dropdowns.length; i++) {
-            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
-        }
+window.onclick = function(e) {
+    if (!e.target.matches('.menu-btn')) {
+        const d = document.getElementById('dropdownMenu');
+        if (d.classList.contains('show')) d.classList.remove('show');
     }
+    if (e.target === document.getElementById('chordModal')) toggleChordLib();
 }
 
 function searchYouTube() {
-    const query = document.getElementById('ytSearch').value;
-    if(query) {
-        window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
-    }
+    const q = document.getElementById('ytSearch').value;
+    if(q) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank');
 }
 
-// 全螢幕切換
 function toggleFullScreen() {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(e => console.log(e));
-    } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-    }
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(console.log);
+    else if (document.exitFullscreen) document.exitFullscreen();
 }
 
-// 計時器邏輯
-let timerInterval = null;
-let timerSeconds = 0;
-function toggleTimer() {
-    const btn = document.getElementById('timerBtn');
-    if(timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-        btn.textContent = "繼續";
-        btn.style.background = "#444";
-    } else {
-        timerInterval = setInterval(() => {
-            timerSeconds++;
-            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-            const secs = (timerSeconds % 60).toString().padStart(2, '0');
-            document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
-        }, 1000);
-        btn.textContent = "暫停";
-        btn.style.background = "#d35400";
-    }
+// 簡單的聲音合成器 (試聽和弦)
+function playChordTone(chordName) {
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+
+    // 簡單定義和弦組成音 (大概頻率)
+    const tones = {
+        'Em7': [82, 123, 164, 196, 246, 329], // E G D G B E
+        'Cadd9': [130, 146, 196, 246, 329],   // C E G D E
+        'G': [98, 123, 146, 196, 246, 329],   // G B D G B E
+        'D/F#': [92, 146, 185, 246, 370],     // F# A D F# A
+        'C': [130, 164, 196, 261, 329],
+        'Am': [110, 164, 220, 261, 329],
+        'F': [87, 130, 174, 220, 261, 349],
+        'Dm7': [146, 220, 261, 349]
+    };
+
+    const notes = tones[chordName] || [261, 329, 392]; // 預設 C major
+    const now = audioCtx.currentTime;
+    
+    notes.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5); // 1.5秒衰減
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        // 模擬撥弦延遲
+        osc.start(now + i * 0.05);
+        osc.stop(now + 2);
+    });
 }
-function resetTimer() {
-    if(timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    timerSeconds = 0;
-    document.getElementById('timerDisplay').textContent = "00:00";
-    document.getElementById('timerBtn').textContent = "開始";
-    document.getElementById('timerBtn').style.background = "#444";
+
+// 生成和弦庫內容 (為了節省空間，這裡簡化顯示文字卡片，實際專案可換成 SVG)
+function renderLibrary() {
+    const grid = document.getElementById('libraryGrid');
+    if(grid.children.length > 0) return; // 已經產生過就不重跑
+    
+    const chords = ['C', 'Am', 'F', 'G', 'Em', 'Dm7', 'D', 'A', 'E'];
+    chords.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'chord-card';
+        div.innerHTML = `<div style="font-size:24px; padding:15px 0;">${c}</div><div class="chord-name">播放</div>`;
+        div.onclick = () => playChordTone(c);
+        grid.appendChild(div);
+    });
 }
 
 /* ==============================
-   1. 調音器變數與設定
+   1. 調音變數 (含多種調音模式)
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -463,8 +433,6 @@ let analyser = null;
 let zeroGain = null;
 let mediaStream = null;
 let rafId = null;
-
-// 錄音相關
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
@@ -473,10 +441,22 @@ const ENERGY_THRESHOLD = 0.002;
 const RESIZE_ANALYSER_SIZE = 2048;
 const VISUAL_GAIN = 3.0; 
 
-const STANDARD_TUNING = {
-  "E2": 82.4069, "A2": 110.0000, "D3": 146.8324,
-  "G3": 196.0000, "B3": 246.9417, "E4": 329.6276
+// 定義不同調音模式
+const TUNING_MODES = {
+    'Standard': { "E2": 82.41, "A2": 110.00, "D3": 146.83, "G3": 196.00, "B3": 246.94, "E4": 329.63 },
+    'HalfStep': { "Eb2": 77.78, "Ab2": 103.83, "Db3": 138.59, "Gb3": 185.00, "Bb3": 233.08, "Eb4": 311.13 }, // 半音降
+    'DropD':    { "D2": 73.42, "A2": 110.00, "D3": 146.83, "G3": 196.00, "B3": 246.94, "E4": 329.63 }    // Drop D
 };
+
+let currentTuning = TUNING_MODES['Standard'];
+
+function changeTuning() {
+    const mode = document.getElementById('tuningSelect').value;
+    currentTuning = TUNING_MODES[mode];
+    // 更新顯示文字
+    const labels = { 'Standard': 'A4=440Hz', 'HalfStep': 'Eb Tuning', 'DropD': 'Drop D' };
+    document.getElementById('baseFreqLabel').textContent = labels[mode];
+}
 
 // UI 元素
 const startBtn = document.getElementById('startBtn');
@@ -488,7 +468,6 @@ const noteEl = document.getElementById('note');
 const centsEl = document.getElementById('cents');
 const debugEl = document.getElementById('debugInfo');
 const audioLinkContainer = document.getElementById('audioLinkContainer');
-
 const waveCanvas = document.getElementById('waveCanvas');
 const wctx = waveCanvas.getContext('2d');
 const gaugeCanvas = document.getElementById('gaugeCanvas');
@@ -498,22 +477,18 @@ let afArray = null;
 let lastPitchTime = 0;
 
 /* ==============================
-   2. 演算法 (Core)
+   2. 演算法
    ============================== */
 function closestString(freq){
   let bestName = "--", bestF = freq, bestDiff = Infinity;
-  for(const name in STANDARD_TUNING){
-    const f = STANDARD_TUNING[name];
+  for(const name in currentTuning){
+    const f = currentTuning[name];
     const diff = Math.abs(1200 * Math.log2(freq / f));
     if(diff < bestDiff){ bestName = name; bestF = f; bestDiff = diff; }
   }
   if(bestDiff > 200) { 
-      const noteNum = 12 * (Math.log2(freq / 440)) + 69;
-      const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-      const rounded = Math.round(noteNum);
-      const nameIdx = ((rounded % 12) + 12) % 12;
-      bestName = noteNames[nameIdx];
-      bestF = 440 * Math.pow(2, (rounded - 69) / 12);
+      // 簡單顯示音名 (略過複雜計算)
+      bestName = "?"; 
   }
   const cents = 1200 * Math.log2(freq / bestF);
   return {name: bestName, targetF: bestF, cents: cents};
@@ -600,7 +575,6 @@ function drawGauge(cents) {
 
     gctx.clearRect(0, 0, w, h);
 
-    // 準確區
     gctx.save();
     gctx.beginPath();
     gctx.moveTo(cx, cy);
@@ -611,7 +585,6 @@ function drawGauge(cents) {
     gctx.fill();
     gctx.restore();
 
-    // 刻度
     gctx.save();
     gctx.translate(cx, cy);
     for (let i = -50; i <= 50; i+=2) { 
@@ -715,7 +688,7 @@ startBtn.addEventListener('click', async () => {
     analyser.connect(zeroGain);
     zeroGain.connect(audioCtx.destination);
 
-    statusEl.textContent = "偵測中...";
+    statusEl.textContent = "偵測中...請撥弦";
     stopBtn.disabled = false;
     recBtn.disabled = false;
 
