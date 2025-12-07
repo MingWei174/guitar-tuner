@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>吉他新手工作站 (調音+教學)</title>
+<title>吉他新手工作站 (Ultimate Edition)</title>
 <style>
     :root {
         --bg-color: #1e2126;
@@ -13,6 +13,7 @@
         --accent-green: #2ecc71;
         --accent-red: #e74c3c;
         --accent-blue: #3498db;
+        --accent-yellow: #f1c40f;
     }
 
     body {
@@ -22,7 +23,6 @@
         margin: 0;
         min-height: 100vh;
         overflow-x: hidden;
-        /* 改為 Flex 佈局以支援左右分欄，但在手機上會自動變垂直 */
         display: flex;
         flex-direction: column;
     }
@@ -38,24 +38,24 @@
         box-sizing: border-box;
         border-bottom: 1px solid #333;
         z-index: 100;
+        position: relative;
     }
 
     h1 { font-size: 20px; margin: 0; font-weight: 600; letter-spacing: 1px; }
 
-    /* 選單按鈕 */
-    .menu-btn { font-size: 24px; color: #adb5bd; cursor: pointer; user-select: none; }
+    .menu-btn { font-size: 24px; color: #adb5bd; cursor: pointer; user-select: none; padding: 5px; }
     
-    /* 下拉選單樣式 */
+    /* 下拉選單 */
     .dropdown-menu {
         position: absolute;
         top: 60px;
         left: 0;
-        width: 250px;
+        width: 260px;
         background-color: #2b3035;
         border: 1px solid #444;
         border-radius: 0 0 10px 0;
         box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
-        display: none; /* 預設隱藏 */
+        display: none;
         flex-direction: column;
         z-index: 200;
     }
@@ -66,11 +66,14 @@
         text-decoration: none;
         border-bottom: 1px solid #3a3f45;
         transition: background 0.2s;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     .dropdown-menu a:hover { background-color: #3a3f45; color: var(--accent-green); }
     .dropdown-menu a:last-child { border-bottom: none; }
 
-    /* 錄音按鈕 */
     .rec-btn {
         background: #343a40;
         border: 1px solid #495057;
@@ -88,10 +91,10 @@
     .rec-btn.recording { background-color: rgba(231, 76, 60, 0.2); border-color: var(--accent-red); color: var(--accent-red); }
     .rec-btn.recording .rec-dot { animation: blink 1s infinite; }
 
-    /* --- Main Container (左右佈局核心) --- */
+    /* --- Main Layout --- */
     .main-container {
         display: flex;
-        flex-wrap: wrap; /* 讓手機版可以換行 */
+        flex-wrap: wrap;
         width: 100%;
         max-width: 1200px;
         margin: 0 auto;
@@ -101,38 +104,14 @@
         justify-content: center;
     }
 
-    /* 左側：調音器 */
-    .left-panel {
-        flex: 1;
-        min-width: 350px; /* 手機版最小寬度 */
-        max-width: 500px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
+    .left-panel { flex: 1; min-width: 340px; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
+    .right-panel { flex: 1; min-width: 340px; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
 
-    /* 右側：影片與教學 */
-    .right-panel {
-        flex: 1;
-        min-width: 350px;
-        max-width: 600px;
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-    }
-
-    /* --- Tuner Styles (左側) --- */
+    /* --- Tuner Styles --- */
     .controls { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; justify-content: center;}
     .main-btn {
-        background: var(--accent-green);
-        color: #fff;
-        border: none;
-        padding: 12px 32px;
-        border-radius: 30px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+        background: var(--accent-green); color: #fff; border: none; padding: 12px 32px; border-radius: 30px;
+        font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
     }
     .main-btn:disabled { background: #495057; color: #868e96; box-shadow: none; cursor: not-allowed; }
     .stop-btn { background: var(--accent-red); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
@@ -141,7 +120,7 @@
         background-color: var(--panel-bg);
         width: 100%;
         border-radius: 24px;
-        padding: 25px 20px;
+        padding: 20px;
         text-align: center;
         box-shadow: 0 10px 25px rgba(0,0,0,0.4);
         display: flex;
@@ -152,19 +131,14 @@
     }
 
     .info-row { display: flex; justify-content: space-between; width: 100%; color: var(--text-sub); font-size: 12px; margin-bottom: 5px; }
-    #gaugeCanvas { width: 100%; height: auto; display: block; margin-top: 10px; }
-    .note-display { font-size: 90px; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+    #gaugeCanvas { width: 100%; height: auto; display: block; margin-top: 5px; }
+    .note-display { font-size: 80px; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
     .cents-badge { background: #212529; padding: 4px 12px; border-radius: 8px; border: 1px solid #495057; font-size: 16px; font-weight: 600; color: var(--accent-blue); display: inline-block; margin-bottom: 5px; }
     .freq-detail { font-size: 14px; color: var(--text-sub); margin-top: 5px; font-family: monospace; }
 
     .visualizer-container {
-        width: 100%;
-        height: 100px;
-        margin-top: 15px;
-        background: #1a1d20;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid #3a3f45;
+        width: 100%; height: 80px; margin-top: 15px; background: #1a1d20;
+        border-radius: 12px; overflow: hidden; border: 1px solid #3a3f45;
     }
     #waveCanvas { width: 100%; height: 100%; display: block; }
     #status { margin-top: 10px; color: var(--text-sub); font-size: 13px; font-style: italic;}
@@ -172,73 +146,89 @@
     a.download-link { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dashed; font-size: 14px; display: block; margin-top: 5px;}
     audio { width: 100%; margin-top: 5px; height: 36px; }
 
-    /* --- Right Panel Styles (右側：影片與和弦) --- */
+    /* --- Right Panel: Tools & Video --- */
+    
+    /* 搜尋列 */
+    .search-bar {
+        display: flex; gap: 10px; margin-bottom: 5px;
+    }
+    .search-input {
+        flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #444; 
+        background: #1a1d20; color: white; font-size: 14px;
+    }
+    .search-btn {
+        background: #343a40; color: white; border: 1px solid #444; 
+        padding: 0 15px; border-radius: 8px; cursor: pointer;
+    }
+
+    /* 影片區 */
     .video-wrapper {
-        width: 100%;
-        background: #000;
-        border-radius: 12px;
-        overflow: hidden;
-        aspect-ratio: 16 / 9; /* 維持影片比例 */
-        border: 1px solid #444;
+        width: 100%; background: #000; border-radius: 12px; overflow: hidden;
+        aspect-ratio: 16 / 9; border: 1px solid #444;
     }
     .video-wrapper iframe { width: 100%; height: 100%; border: none; }
 
+    /* 計時器區塊 (新增) */
+    .timer-section {
+        background: var(--panel-bg); border-radius: 12px; padding: 15px;
+        border: 1px solid #3a3f45; display: flex; align-items: center; justify-content: space-between;
+    }
+    .timer-display { font-size: 24px; font-weight: bold; font-family: monospace; color: var(--accent-yellow); }
+    .timer-btn { 
+        background: #444; color: white; border: none; padding: 5px 12px; 
+        border-radius: 6px; cursor: pointer; font-size: 14px; 
+    }
+    .timer-btn:hover { background: #555; }
+
+    /* 和弦區塊 */
     .chord-section {
-        background: var(--panel-bg);
-        border-radius: 12px;
-        padding: 15px;
+        background: var(--panel-bg); border-radius: 12px; padding: 20px;
         border: 1px solid #3a3f45;
     }
-    .chord-title { font-size: 16px; margin-bottom: 10px; color: var(--accent-green); font-weight: bold; }
+    .chord-title { font-size: 16px; margin-bottom: 15px; color: var(--accent-green); font-weight: bold; display: flex; align-items: center; gap: 8px;}
     
     .chord-grid {
-        display: flex;
-        gap: 10px;
-        justify-content: space-around;
-        flex-wrap: wrap;
+        display: flex; gap: 15px; justify-content: space-around; flex-wrap: wrap;
     }
-    /* 模擬和弦圖的方塊 (Placeholder) */
-    .chord-box {
-        width: 70px;
-        height: 90px;
-        background: #fff;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #333;
-        font-weight: bold;
-        position: relative;
-    }
-    /* 這裡你可以放真正的 img 標籤 */
-    .chord-box span { font-size: 24px; }
-    .chord-label {
-        position: absolute;
-        bottom: -20px;
-        width: 100%;
+    
+    /* SVG 和弦圖樣式 */
+    .chord-card {
         text-align: center;
-        color: #fff;
-        font-size: 12px;
+        background: #fff;
+        padding: 5px;
+        border-radius: 6px;
+        width: 80px;
     }
+    .chord-card svg { width: 100%; height: auto; display: block;}
+    .chord-name { 
+        color: #333; font-weight: bold; font-size: 14px; margin-top: 2px; 
+        border-top: 1px solid #eee; padding-top: 2px;
+    }
+
+    .chord-footer { margin-top: 15px; color: #888; font-size: 12px; line-height: 1.4; border-top: 1px solid #444; padding-top: 10px;}
 
     @keyframes blink { 50% { opacity: 0; } }
 
-    /* 手機版適應 (小於 800px 時強制垂直排列) */
     @media (max-width: 800px) {
         .main-container { flex-direction: column; align-items: center; }
         .left-panel, .right-panel { width: 100%; max-width: 100%; }
+        .dropdown-menu { width: 200px; }
     }
+
 </style>
 </head>
 <body>
 
     <header>
-        <div class="menu-btn" onclick="toggleMenu()">☰</div>
+        <div class="menu-btn" onclick="toggleMenu()" title="選單">☰</div>
         
         <div class="dropdown-menu" id="dropdownMenu">
             <a href="https://www.91pu.com.tw/" target="_blank">🎸 91 譜 (吉他譜網站)</a>
             <a href="https://www.91pu.com.tw/song/2015/0925/667.html" target="_blank">🎵 周杰倫 - 晴天 (吉他譜)</a>
+            <a href="https://www.ultimate-guitar.com/" target="_blank">🌍 Ultimate Guitar (全球最大)</a>
+            <a href="https://www.songsterr.com/" target="_blank">🎼 Songsterr (動態樂譜)</a>
             <a href="https://www.musicca.com/metronome" target="_blank">⏱️ 線上節拍器</a>
+            <a href="#" onclick="toggleFullScreen()">📺 切換全螢幕模式</a>
             <a href="#" onclick="alert('功能開發中！')">❓ 如何調音教學</a>
         </div>
 
@@ -274,30 +264,127 @@
                 <canvas id="waveCanvas" width="600" height="150"></canvas>
             </div>
 
-            <div id="status">準備就緒，請按下開始 (建議戴耳機使用)</div>
+            <div id="status">準備就緒，請按下開始 (建議使用 Chrome/Edge)</div>
             <div id="audioLinkContainer"></div>
         </div>
 
         <div class="right-panel">
+            
+            <div class="search-bar">
+                <input type="text" id="ytSearch" class="search-input" placeholder="輸入歌曲名稱 (例: 晴天 吉他教學)...">
+                <button class="search-btn" onclick="searchYouTube()">🔍 搜尋</button>
+            </div>
+
             <div class="video-wrapper">
                 <iframe 
-                    src="https://www.youtube.com/embed/DYptgVvkVLQ?si=Placeholder" 
+                    src="https://www.youtube.com/embed/videoseries?list=PLMWOrj-pmqk1De7urlm4UiTRX5AuH4Qku" 
                     title="YouTube video player" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                     allowfullscreen>
                 </iframe>
             </div>
 
-            <div class="chord-section">
-                <div class="chord-title">🔥 晴天 - 常用和弦表 (範例)</div>
-                <div class="chord-grid">
-                    <div class="chord-box">Em<div class="chord-label">Em</div></div>
-                    <div class="chord-box">C<div class="chord-label">Cmaj7</div></div>
-                    <div class="chord-box">G<div class="chord-label">G</div></div>
-                    <div class="chord-box">D<div class="chord-label">D/F#</div></div>
+            <div class="timer-section">
+                <div style="font-size:14px; color:#adb5bd;">⏳ 本次練習時間</div>
+                <div class="timer-display" id="timerDisplay">00:00</div>
+                <div>
+                    <button class="timer-btn" onclick="toggleTimer()" id="timerBtn">開始</button>
+                    <button class="timer-btn" onclick="resetTimer()">重置</button>
                 </div>
-                <div style="margin-top: 10px; color: #888; font-size: 12px;">
-                    * 這是給 "晴天" 這首歌練習用的參考和弦
+            </div>
+
+            <div class="chord-section">
+                <div class="chord-title">🔥 晴天 - 參考和弦 (標準按法)</div>
+                <div class="chord-grid">
+                    
+                    <div class="chord-card">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/> <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/> <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/> <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/> <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/> <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/> <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/> <circle cx="32" cy="30" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/> <circle cx="20" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">Em</div>
+                    </div>
+
+                    <div class="chord-card">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+
+                            <text x="16" y="12" font-size="10" fill="#333">x</text>
+                            
+                            <circle cx="32" cy="50" r="4" fill="#000"/> <circle cx="44" cy="30" r="4" fill="#000"/> <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">Cmaj7</div>
+                    </div>
+
+                    <div class="chord-card">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+
+                            <circle cx="20" cy="50" r="4" fill="#000"/> <circle cx="32" cy="30" r="4" fill="#000"/> <circle cx="80" cy="50" r="4" fill="#000"/> <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
+                            <circle cx="68" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
+                        <div class="chord-name">G</div>
+                    </div>
+
+                    <div class="chord-card">
+                        <svg viewBox="0 0 100 120">
+                            <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
+                            <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/>
+                            <line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
+
+                            <circle cx="20" cy="30" r="4" fill="#000"/> 
+                            
+                            <circle cx="56" cy="30" r="4" fill="#000"/>
+                            <circle cx="68" cy="50" r="4" fill="#000"/>
+                            <circle cx="80" cy="30" r="4" fill="#000"/>
+                            
+                            <text x="28" y="12" font-size="10" fill="#333">x</text>
+                        </svg>
+                        <div class="chord-name">D/F#</div>
+                    </div>
+
+                </div>
+                <div class="chord-footer">
+                    * 上方為 "晴天" 常用參考和弦。<br>
+                    * 黑點代表按壓位置，空心圈代表空弦，X 代表不彈。
                 </div>
             </div>
         </div>
@@ -306,27 +393,69 @@
 
 <script>
 /* ==============================
-   0. 選單控制
+   0. 工具邏輯 (選單, 搜尋, 計時器)
    ============================== */
 function toggleMenu() {
-    const menu = document.getElementById('dropdownMenu');
-    menu.classList.toggle('show');
+    document.getElementById('dropdownMenu').classList.toggle('show');
 }
 
-// 點擊畫面其他地方關閉選單
 window.onclick = function(event) {
     if (!event.target.matches('.menu-btn')) {
         const dropdowns = document.getElementsByClassName("dropdown-menu");
         for (let i = 0; i < dropdowns.length; i++) {
-            if (dropdowns[i].classList.contains('show')) {
-                dropdowns[i].classList.remove('show');
-            }
+            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
         }
     }
 }
 
+function searchYouTube() {
+    const query = document.getElementById('ytSearch').value;
+    if(query) {
+        window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+    }
+}
+
+// 全螢幕切換
+function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(e => console.log(e));
+    } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+    }
+}
+
+// 計時器邏輯
+let timerInterval = null;
+let timerSeconds = 0;
+function toggleTimer() {
+    const btn = document.getElementById('timerBtn');
+    if(timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.textContent = "繼續";
+        btn.style.background = "#444";
+    } else {
+        timerInterval = setInterval(() => {
+            timerSeconds++;
+            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const secs = (timerSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
+        }, 1000);
+        btn.textContent = "暫停";
+        btn.style.background = "#d35400";
+    }
+}
+function resetTimer() {
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    timerSeconds = 0;
+    document.getElementById('timerDisplay').textContent = "00:00";
+    document.getElementById('timerBtn').textContent = "開始";
+    document.getElementById('timerBtn').style.background = "#444";
+}
+
 /* ==============================
-   1. 變數與設定 (沿用穩定版邏輯)
+   1. 調音器變數與設定
    ============================== */
 let audioCtx = null;
 let source = null;
@@ -369,7 +498,7 @@ let afArray = null;
 let lastPitchTime = 0;
 
 /* ==============================
-   2. 演算法 (保持不變)
+   2. 演算法 (Core)
    ============================== */
 function closestString(freq){
   let bestName = "--", bestF = freq, bestDiff = Infinity;
@@ -439,7 +568,7 @@ function autocorrWithCheck(buffer, sampleRate){
 }
 
 /* ==============================
-   3. 繪圖 (保持不變)
+   3. 繪圖
    ============================== */
 function drawWave(input, ctx, canvas) {
   if (!ctx || !canvas) return;
