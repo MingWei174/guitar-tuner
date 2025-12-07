@@ -430,13 +430,17 @@ function playChordTone(chordName) {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(audioCtx.state === 'suspended') audioCtx.resume();
 
-    // 定義準確的吉他頻率
+    // 定義準確的吉他頻率 (對應你指定的特殊指法)
     const tones = {
         // 晴天指定按法
-        'Em7': [82.4, 123.5, 164.8, 196.0, 293.7, 329.6], // 022030 (2弦是3品D, 1弦空弦E)
-        'Cadd9': [130.8, 164.8, 196.0, 293.7, 329.6], // x32030 (2弦是3品D, 1弦空弦E)
-        'G': [98.0, 123.5, 146.8, 196.0, 293.7, 329.6], // 320030 (2弦是3品D, 1弦空弦E)
-        'D/F#': [92.5, 220.0, 293.7, 370.0], // 2xx232 (6弦F#, 3弦A, 2弦D, 1弦F#)
+        // Em7 (022030): 根音E2(82Hz) 很低，需要被強調
+        'Em7': [82.4, 123.5, 164.8, 196.0, 293.7, 329.6], 
+        // Cadd9 (x32030): 根音C3(130Hz)
+        'Cadd9': [130.8, 164.8, 196.0, 293.7, 329.6], 
+        // G (320030): 根音G2(98Hz)
+        'G': [98.0, 123.5, 146.8, 196.0, 293.7, 329.6], 
+        // D/F# (2xx232): 根音F#2(92.5Hz)
+        'D/F#': [92.5, 220.0, 293.7, 370.0], 
 
         // 通用和弦庫
         'E': [82.4, 123.5, 164.8, 207.6, 246.9, 329.6],
@@ -455,17 +459,24 @@ function playChordTone(chordName) {
     notes.forEach((freq, i) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.type = 'triangle';
+        osc.type = 'triangle'; // 三角波比較像撥弦聲
         osc.frequency.value = freq;
         
+        // --- 關鍵修改 ---
+        // 判斷是否為低頻 (根音區)，如果是，音量放大
+        const isBass = freq < 170; 
+        const volume = isBass ? 0.35 : 0.12; // 低音給 0.35，高音只給 0.12，製造層次感
+        const sustain = isBass ? 2.5 : 1.8;  // 低音延音長一點
+
         gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.15, now + 0.05 + i * 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+        // 模擬撥弦：稍微錯開時間 (Strruming effect)
+        gain.gain.linearRampToValueAtTime(volume, now + 0.05 + i * 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + sustain);
         
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 2.5);
+        osc.stop(now + sustain + 0.5);
     });
 }
 
