@@ -359,17 +359,18 @@
                         <div class="chord-name">Cadd9</div>
                     </div>
 
-                    <div class="chord-card" onclick="playChordTone('G')">
+                    <div class="chord-card" onclick="playChordTone('G_sunny')">
                         <svg viewBox="0 0 100 120">
                             <line x1="20" y1="20" x2="80" y2="20" stroke="#333" stroke-width="4"/>
                             <line x1="20" y1="20" x2="20" y2="100" stroke="#999" stroke-width="1"/><line x1="32" y1="20" x2="32" y2="100" stroke="#999" stroke-width="1"/><line x1="44" y1="20" x2="44" y2="100" stroke="#999" stroke-width="1"/><line x1="56" y1="20" x2="56" y2="100" stroke="#999" stroke-width="1"/><line x1="68" y1="20" x2="68" y2="100" stroke="#999" stroke-width="1"/><line x1="80" y1="20" x2="80" y2="100" stroke="#999" stroke-width="1"/>
                             <line x1="20" y1="40" x2="80" y2="40" stroke="#999" stroke-width="1"/><line x1="20" y1="60" x2="80" y2="60" stroke="#999" stroke-width="1"/><line x1="20" y1="80" x2="80" y2="80" stroke="#999" stroke-width="1"/><line x1="20" y1="100" x2="80" y2="100" stroke="#999" stroke-width="1"/>
-                            
                             <circle cx="20" cy="80" r="4" fill="#000"/>
                             <circle cx="32" cy="60" r="4" fill="#000"/>
                             <circle cx="44" cy="10" r="2" fill="none" stroke="#333"/>
                             <circle cx="56" cy="10" r="2" fill="none" stroke="#333"/>
-                            <circle cx="68" cy="80" r="4" fill="#000"/> <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/> </svg>
+                            <circle cx="68" cy="80" r="4" fill="#000"/>
+                            <circle cx="80" cy="10" r="2" fill="none" stroke="#333"/>
+                        </svg>
                         <div class="chord-name">G</div>
                     </div>
 
@@ -425,24 +426,24 @@ function toggleFullScreen() {
     else if (document.exitFullscreen) document.exitFullscreen();
 }
 
-// 2. 修改：聲音合成器 (依據使用者指定的 022030, x32030, 320030, 2xx232)
+// 修改：聲音合成器 (分離標準和弦與特化和弦，並保留低頻增強)
 function playChordTone(chordName) {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(audioCtx.state === 'suspended') audioCtx.resume();
 
-    // 定義準確的吉他頻率 (對應你指定的特殊指法)
     const tones = {
-        // 晴天指定按法
-        // Em7 (022030): 根音E2(82Hz) 很低，需要被強調
+        // --- 晴天專用 (特化按法) ---
+        // Em7 (022030): 2弦3品D, 1弦空弦E
         'Em7': [82.4, 123.5, 164.8, 196.0, 293.7, 329.6], 
-        // Cadd9 (x32030): 根音C3(130Hz)
+        // Cadd9 (x32030): 2弦3品D, 1弦空弦E
         'Cadd9': [130.8, 164.8, 196.0, 293.7, 329.6], 
-        // G (320030): 根音G2(98Hz)
-        'G': [98.0, 123.5, 146.8, 196.0, 293.7, 329.6], 
-        // D/F# (2xx232): 根音F#2(92.5Hz)
+        // G_sunny (320030): 晴天特化版，2弦3品D, 1弦空弦E
+        'G_sunny': [98.0, 123.5, 146.8, 196.0, 293.7, 329.6], 
+        // D/F# (2xx232): 晴天特化版
         'D/F#': [92.5, 220.0, 293.7, 370.0], 
 
-        // 通用和弦庫
+        // --- 標準和弦庫 (通用按法) ---
+        'G': [98.0, 123.5, 146.8, 196.0, 246.9, 392.0], // 標準 G (320003)
         'E': [82.4, 123.5, 164.8, 207.6, 246.9, 329.6],
         'Em': [82.4, 123.5, 164.8, 196.0, 246.9, 329.6],
         'A': [110.0, 164.8, 220.0, 277.2, 329.6],
@@ -459,17 +460,15 @@ function playChordTone(chordName) {
     notes.forEach((freq, i) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.type = 'triangle'; // 三角波比較像撥弦聲
+        osc.type = 'triangle'; 
         osc.frequency.value = freq;
         
-        // --- 關鍵修改 ---
-        // 判斷是否為低頻 (根音區)，如果是，音量放大
+        // 低頻增強邏輯 (Bass Boost)
         const isBass = freq < 170; 
-        const volume = isBass ? 0.35 : 0.12; // 低音給 0.35，高音只給 0.12，製造層次感
-        const sustain = isBass ? 2.5 : 1.8;  // 低音延音長一點
+        const volume = isBass ? 0.35 : 0.12; 
+        const sustain = isBass ? 2.5 : 1.8;  
 
         gain.gain.setValueAtTime(0, now);
-        // 模擬撥弦：稍微錯開時間 (Strruming effect)
         gain.gain.linearRampToValueAtTime(volume, now + 0.05 + i * 0.03);
         gain.gain.exponentialRampToValueAtTime(0.001, now + sustain);
         
