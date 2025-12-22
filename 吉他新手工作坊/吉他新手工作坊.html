@@ -316,7 +316,13 @@
                 <div class="timer-controls">
                     <button class="timer-btn start" onclick="toggleTimer()" id="timerBtn">開始計時</button>
                     <button class="timer-btn reset" onclick="resetTimer()">重置</button>
+                    <button class="timer-btn save" onclick="savePracticeToPython()" style="background:#e67e22; color:white; border:none; margin-left:5px;">💾 存檔</button>
                 </div>
+                <div id="logArea" style="margin-top:15px; text-align:left; background:#1a1d20; padding:10px; border-radius:8px; font-size:12px; color:#ccc; max-height:100px; overflow-y:auto;">
+                    <div>📜 練習紀錄 (來自 Python 後端):</div>
+                    <ul id="logList" style="padding-left:20px; margin:5px 0;"></ul>
+                </div>
+
             </div>
 
             <div class="chord-section">
@@ -425,6 +431,59 @@ function toggleFullScreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(console.log);
     else if (document.exitFullscreen) document.exitFullscreen();
 }
+
+// --- 新增：前後端串接功能 ---
+
+// 1. 傳送資料給 Python
+function savePracticeToPython() {
+    const timeText = document.getElementById('timerDisplay').textContent;
+    if(timeText === "00:00") {
+        alert("還沒開始練習喔！");
+        return;
+    }
+
+    const now = new Date().toLocaleString();
+    const payload = {
+        date: now,
+        duration: timeText
+    };
+
+    // 使用 fetch 發送 POST 請求給 app.py
+    fetch('/api/save_log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message); // 顯示 "紀錄已儲存"
+        loadLogsFromPython(); // 重新讀取列表
+    })
+    .catch(err => console.error("存檔失敗:", err));
+}
+
+// 2. 從 Python 讀取資料
+function loadLogsFromPython() {
+    fetch('/api/get_logs')
+    .then(response => response.json())
+    .then(records => {
+        const list = document.getElementById('logList');
+        list.innerHTML = ''; // 清空舊的
+        records.forEach(rec => {
+            const li = document.createElement('li');
+            li.textContent = `${rec.date} - 練習了 ${rec.duration}`;
+            list.appendChild(li);
+        });
+    });
+}
+
+// 網頁一打開就先讀取一次紀錄
+window.onload = function() {
+    // 這裡可以放原本的初始化程式碼...
+    loadLogsFromPython();
+};
+
+
 
 // 修改：聲音合成器 (分離標準和弦與特化和弦，並保留低頻增強)
 function playChordTone(chordName) {
@@ -928,6 +987,7 @@ function stopRecording() {
     }
 }
 
+
 // 初始化
 drawGauge(-999);
 wctx.beginPath();
@@ -938,3 +998,7 @@ wctx.stroke();
 </script>
 </body>
 </html>
+
+
+
+
